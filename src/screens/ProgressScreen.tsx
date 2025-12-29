@@ -1,8 +1,8 @@
 /**
  * ProgressScreen
  * 
- * Data-driven progress view with metrics tiles and minimal charts.
- * No trophies, no animations, just calm data visualization.
+ * Data-driven progress view with universe background.
+ * Metrics tiles and minimal charts.
  */
 
 import React from 'react';
@@ -14,18 +14,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius } from '../theme';
+import { UniverseBackground } from '../components';
 
-// Placeholder data - in real app, this would come from state/database
 const progressData = {
     totalSugarFreeDays: 47,
     currentStreak: 12,
     longestStreak: 18,
     daysLogged: 52,
-    weeklyData: [1, 1, 1, 0, 1, 1, 1], // 1 = sugar-free, 0 = sugar consumed
-    monthlyData: [5, 6, 7, 4, 6, 7, 6, 5], // sugar-free days per week
+    weeklyData: [1, 1, 1, 0, 1, 1, 1],
+    monthlyData: [5, 6, 7, 4, 6, 7, 6, 5],
 };
 
-// Metric Tile Component
 function MetricTile({ label, value }: { label: string; value: number | string }) {
     return (
         <View style={styles.metricTile}>
@@ -35,7 +34,6 @@ function MetricTile({ label, value }: { label: string; value: number | string })
     );
 }
 
-// Simple Bar Chart Component
 function SimpleBarChart({ data, label }: { data: number[]; label: string }) {
     const maxValue = Math.max(...data, 1);
 
@@ -65,7 +63,6 @@ function SimpleBarChart({ data, label }: { data: number[]; label: string }) {
     );
 }
 
-// Week View Component
 function WeekView({ data }: { data: number[] }) {
     const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -91,43 +88,44 @@ function WeekView({ data }: { data: number[] }) {
 
 export default function ProgressScreen() {
     return (
-        <SafeAreaView style={styles.container}>
-            <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-            >
-                {/* Header */}
-                <View style={styles.header}>
-                    <Text style={styles.title}>Progress</Text>
-                    <Text style={styles.subtitle}>Your journey in numbers</Text>
-                </View>
+        <UniverseBackground showParticles={false}>
+            <SafeAreaView style={styles.container}>
+                <ScrollView
+                    style={styles.scrollView}
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <Text style={styles.title}>Progress</Text>
+                        <Text style={styles.subtitle}>Your journey in numbers</Text>
+                    </View>
 
-                {/* Metrics Grid */}
-                <View style={styles.metricsGrid}>
-                    <MetricTile label="Sugar-free days" value={progressData.totalSugarFreeDays} />
-                    <MetricTile label="Current streak" value={progressData.currentStreak} />
-                    <MetricTile label="Longest streak" value={progressData.longestStreak} />
-                    <MetricTile label="Days logged" value={progressData.daysLogged} />
-                </View>
+                    {/* Metrics Grid */}
+                    <View style={styles.metricsGrid}>
+                        <MetricTile label="Sugar-free days" value={progressData.totalSugarFreeDays} />
+                        <MetricTile label="Current streak" value={progressData.currentStreak} />
+                        <MetricTile label="Longest streak" value={progressData.longestStreak} />
+                        <MetricTile label="Days logged" value={progressData.daysLogged} />
+                    </View>
 
-                {/* Week View */}
-                <WeekView data={progressData.weeklyData} />
+                    {/* Week View */}
+                    <WeekView data={progressData.weeklyData} />
 
-                {/* Monthly Chart */}
-                <SimpleBarChart
-                    data={progressData.monthlyData}
-                    label="Weekly sugar-free days"
-                />
-            </ScrollView>
-        </SafeAreaView>
+                    {/* Monthly Chart */}
+                    <SimpleBarChart
+                        data={progressData.monthlyData}
+                        label="Weekly sugar-free days"
+                    />
+                </ScrollView>
+            </SafeAreaView>
+        </UniverseBackground>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background.primary,
     },
     scrollView: {
         flex: 1,
@@ -152,7 +150,6 @@ const styles = StyleSheet.create({
         fontWeight: '400',
         color: colors.text.secondary,
     },
-    // Metrics Grid
     metricsGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -176,7 +173,6 @@ const styles = StyleSheet.create({
         fontWeight: '400',
         color: colors.text.tertiary,
     },
-    // Week View
     weekContainer: {
         backgroundColor: colors.background.secondary,
         borderRadius: borderRadius.xl,
@@ -198,7 +194,7 @@ const styles = StyleSheet.create({
         borderRadius: 14,
     },
     dayDotFilled: {
-        backgroundColor: colors.text.tertiary,
+        backgroundColor: colors.accent.success,
     },
     dayDotEmpty: {
         backgroundColor: colors.glass.light,
@@ -210,7 +206,6 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         color: colors.text.muted,
     },
-    // Chart
     chartContainer: {
         backgroundColor: colors.background.secondary,
         borderRadius: borderRadius.xl,
@@ -234,7 +229,7 @@ const styles = StyleSheet.create({
     },
     bar: {
         width: 24,
-        backgroundColor: colors.text.tertiary,
+        backgroundColor: colors.accent.primary,
         borderRadius: 4,
         minHeight: 4,
     },

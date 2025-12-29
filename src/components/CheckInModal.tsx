@@ -13,23 +13,28 @@ import {
     TouchableOpacity,
     TouchableWithoutFeedback,
     TextInput,
+    Keyboard,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Button } from './Button';
 import { GlassCard } from './GlassCard';
 import { colors, typography, spacing, borderRadius } from '../theme';
+import { getCurrentDayLimit } from '../utils/planUtils';
 
 interface CheckInModalProps {
     visible: boolean;
     onClose: () => void;
     onCheckIn: (sugarFree: boolean, extras?: CheckInExtras) => Promise<void>;
     isLoading?: boolean;
+    planType?: 'cold_turkey' | 'gradual';
+    startDate?: Date;
 }
 
 interface CheckInExtras {
     notes?: string;
     cravingLevel?: 1 | 2 | 3 | 4 | 5;
     mood?: 1 | 2 | 3 | 4 | 5;
+    sugarGrams?: number;
 }
 
 export function CheckInModal({
@@ -37,27 +42,60 @@ export function CheckInModal({
     onClose,
     onCheckIn,
     isLoading = false,
+    planType = 'cold_turkey',
+    startDate = new Date(),
 }: CheckInModalProps) {
     const [sugarFree, setSugarFree] = useState<boolean | null>(null);
-    const [cravingLevel, setCravingLevel] = useState<number>(3);
-    const [mood, setMood] = useState<number>(3);
-    const [notes, setNotes] = useState('');
-    const [step, setStep] = useState<'choice' | 'details' | 'success'>('choice');
+    const [sugarGrams, setSugarGrams] = useState<string>('');
+    const [step, setStep] = useState<'choice' | 'success'>('choice');
+
+    // Calculate dynamic daily limit based on current week for gradual plan
+    const currentLimit = planType === 'gradual'
+        ? getCurrentDayLimit(planType, startDate)
+        : null;
+    const dailyLimit = currentLimit?.dailyGrams || 0;
+    const weekTitle = currentLimit?.title || '';
+    const isColdTurkey = planType === 'cold_turkey';
+
+    // Handle gram input change - auto-select within/exceeded based on value
+    const handleGramsChange = (value: string) => {
+        setSugarGrams(value);
+
+        // Auto-select choice based on entered grams
+        if (value && !isColdTurkey) {
+            const grams = parseInt(value, 10) || 0;
+            if (grams <= dailyLimit) {
+                setSugarFree(true); // Within limit
+            } else {
+                setSugarFree(false); // Exceeded limit
+            }
+        }
+    };
 
     const handleChoice = async (choice: boolean) => {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         setSugarFree(choice);
-        setStep('details');
+
+        // For gradual plan with gram input, just mark the selection
+        // Submit will happen when user taps "Complete Check-In"
+        if (!isColdTurkey) {
+            // Stay on choice step to allow gram entry
+            return;
+        }
+
+        // For cold turkey, submit immediately
+        await submitCheckIn(choice);
     };
 
-    const handleSubmit = async () => {
-        if (sugarFree === null) return;
+    const submitCheckIn = async (sugarFreeValue: boolean) => {
+        const extras: CheckInExtras = {};
 
-        await onCheckIn(sugarFree, {
-            cravingLevel: cravingLevel as 1 | 2 | 3 | 4 | 5,
-            mood: mood as 1 | 2 | 3 | 4 | 5,
-            notes: notes.trim() || undefined,
-        });
+        // Add sugar grams for gradual plan
+        if (!isColdTurkey && sugarGrams) {
+            extras.sugarGrams = parseInt(sugarGrams, 10) || 0;
+        }
+
+        await onCheckIn(sugarFreeValue, Object.keys(extras).length > 0 ? extras : undefined);
 
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setStep('success');
@@ -68,120 +106,98 @@ export function CheckInModal({
         }, 1500);
     };
 
+    const handleSubmit = async () => {
+        if (sugarFree === null) return;
+        await submitCheckIn(sugarFree);
+    };
+
     const handleClose = () => {
         // Reset state
         setSugarFree(null);
-        setCravingLevel(3);
-        setMood(3);
-        setNotes('');
+        setSugarGrams('');
         setStep('choice');
         onClose();
     };
 
-    const renderChoice = () => (
-        <View style={styles.choiceContainer}>
-            <Text style={styles.title}>How was today?</Text>
-            <Text style={styles.subtitle}>Be honest with yourself</Text>
+    const renderChoice = () => {
+        const title = isColdTurkey ? 'How was today?' : `Today's Limit: ${dailyLimit}g`;
+        const subtitle = isColdTurkey ? 'Be honest with yourself' : weekTitle;
 
-            <View style={styles.choiceButtons}>
-                <TouchableOpacity
-                    style={[styles.choiceButton, styles.sugarFreeButton]}
-                    onPress={() => handleChoice(true)}
-                >
-                    <Text style={styles.choiceEmoji}>✅</Text>
-                    <Text style={styles.choiceLabel}>Sugar-Free</Text>
-                    <Text style={styles.choiceSubtext}>No added sugar today</Text>
-                </TouchableOpacity>
+        return (
+            <View style={styles.choiceContainer}>
+                <Text style={styles.title}>{title}</Text>
+                <Text style={styles.subtitle}>{subtitle}</Text>
 
-                <TouchableOpacity
-                    style={[styles.choiceButton, styles.hadSugarButton]}
-                    onPress={() => handleChoice(false)}
-                >
-                    <Text style={styles.choiceEmoji}>🍬</Text>
-                    <Text style={styles.choiceLabel}>Had Sugar</Text>
-                    <Text style={styles.choiceSubtext}>It happens, reset tomorrow</Text>
-                </TouchableOpacity>
-            </View>
-        </View>
-    );
+                <View style={styles.choiceButtons}>
+                    <TouchableOpacity
+                        style={[
+                            styles.choiceButton,
+                            styles.sugarFreeButton,
+                            sugarFree === true && styles.choiceButtonSelected,
+                        ]}
+                        onPress={() => handleChoice(true)}
+                    >
+                        <Text style={styles.choiceEmoji}>✅</Text>
+                        <Text style={styles.choiceLabel}>
+                            {isColdTurkey ? 'Sugar-Free' : 'Within Limit'}
+                        </Text>
+                        <Text style={styles.choiceSubtext}>
+                            {isColdTurkey ? 'No added sugar today' : `Under ${dailyLimit}g`}
+                        </Text>
+                    </TouchableOpacity>
 
-    const renderDetails = () => (
-        <View style={styles.detailsContainer}>
-            <Text style={styles.title}>
-                {sugarFree ? 'Great job! 🎉' : 'Tomorrow is a new day'}
-            </Text>
-            <Text style={styles.subtitle}>A few quick questions (optional)</Text>
-
-            {/* Craving Level */}
-            <View style={styles.sliderSection}>
-                <Text style={styles.sliderLabel}>Craving Level</Text>
-                <View style={styles.ratingRow}>
-                    {[1, 2, 3, 4, 5].map((level) => (
-                        <TouchableOpacity
-                            key={level}
-                            style={[
-                                styles.ratingButton,
-                                cravingLevel === level && styles.ratingButtonActive,
-                            ]}
-                            onPress={() => setCravingLevel(level)}
-                        >
-                            <Text style={[
-                                styles.ratingText,
-                                cravingLevel === level && styles.ratingTextActive,
-                            ]}>
-                                {level}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
+                    <TouchableOpacity
+                        style={[
+                            styles.choiceButton,
+                            styles.hadSugarButton,
+                            sugarFree === false && styles.choiceButtonSelected,
+                        ]}
+                        onPress={() => handleChoice(false)}
+                    >
+                        <Text style={styles.choiceEmoji}>{isColdTurkey ? '🍬' : '⚠️'}</Text>
+                        <Text style={styles.choiceLabel}>
+                            {isColdTurkey ? 'Had Sugar' : 'Exceeded Limit'}
+                        </Text>
+                        <Text style={styles.choiceSubtext}>
+                            {isColdTurkey ? 'Reset tomorrow' : `Over ${dailyLimit}g`}
+                        </Text>
+                    </TouchableOpacity>
                 </View>
-                <View style={styles.ratingLabels}>
-                    <Text style={styles.ratingLabelText}>None</Text>
-                    <Text style={styles.ratingLabelText}>Intense</Text>
-                </View>
-            </View>
 
-            {/* Mood */}
-            <View style={styles.sliderSection}>
-                <Text style={styles.sliderLabel}>Overall Mood</Text>
-                <View style={styles.ratingRow}>
-                    {['😔', '😕', '😐', '🙂', '😊'].map((emoji, index) => (
-                        <TouchableOpacity
-                            key={index}
-                            style={[
-                                styles.emojiButton,
-                                mood === index + 1 && styles.emojiButtonActive,
-                            ]}
-                            onPress={() => setMood(index + 1)}
-                        >
-                            <Text style={styles.emojiText}>{emoji}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            </View>
+                {/* Gram input for gradual plan */}
+                {!isColdTurkey && (
+                    <View style={styles.gramInputContainer}>
+                        <Text style={styles.gramInputLabel}>How much sugar did you have? (optional)</Text>
+                        <View style={styles.gramInputRow}>
+                            <TextInput
+                                style={styles.gramInput}
+                                placeholder="0"
+                                placeholderTextColor="#AAAAAA"
+                                value={sugarGrams}
+                                onChangeText={handleGramsChange}
+                                keyboardType="number-pad"
+                                maxLength={3}
+                                returnKeyType="done"
+                                onSubmitEditing={() => Keyboard.dismiss()}
+                            />
+                            <Text style={styles.gramInputUnit}>grams</Text>
+                        </View>
+                    </View>
+                )}
 
-            {/* Notes */}
-            <View style={styles.notesSection}>
-                <Text style={styles.sliderLabel}>Notes (optional)</Text>
-                <TextInput
-                    style={styles.notesInput}
-                    placeholder="How are you feeling?"
-                    placeholderTextColor={colors.text.muted}
-                    value={notes}
-                    onChangeText={setNotes}
-                    multiline
-                    maxLength={200}
-                />
+                {/* Submit button for gradual plan (after selection) */}
+                {!isColdTurkey && sugarFree !== null && (
+                    <Button
+                        title="Complete Check-In"
+                        onPress={handleSubmit}
+                        loading={isLoading}
+                        fullWidth
+                        style={styles.submitButton}
+                    />
+                )}
             </View>
-
-            <Button
-                title="Complete Check-In"
-                onPress={handleSubmit}
-                loading={isLoading}
-                fullWidth
-                style={styles.submitButton}
-            />
-        </View>
-    );
+        );
+    };
 
     const renderSuccess = () => (
         <View style={styles.successContainer}>
@@ -211,7 +227,6 @@ export function CheckInModal({
                             <View style={styles.handle} />
 
                             {step === 'choice' && renderChoice()}
-                            {step === 'details' && renderDetails()}
                             {step === 'success' && renderSuccess()}
 
                             {step !== 'success' && (
@@ -231,16 +246,18 @@ const styles = StyleSheet.create({
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.6)',
-        justifyContent: 'flex-end',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: spacing.lg,
     },
     modalContent: {
-        backgroundColor: colors.background.secondary,
-        borderTopLeftRadius: borderRadius['3xl'],
-        borderTopRightRadius: borderRadius['3xl'],
-        paddingHorizontal: spacing.screen.horizontal,
-        paddingBottom: spacing['4xl'],
-        paddingTop: spacing.md,
-        minHeight: 400,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderRadius: borderRadius['2xl'],
+        paddingHorizontal: spacing.lg,
+        paddingBottom: spacing.xl,
+        paddingTop: spacing.lg,
+        width: '100%',
+        maxWidth: 360,
     },
     handle: {
         width: 40,
@@ -252,13 +269,13 @@ const styles = StyleSheet.create({
     },
     title: {
         ...typography.styles.h2,
-        color: colors.text.primary,
+        color: '#1A1A3D',
         textAlign: 'center',
         marginBottom: spacing.xs,
     },
     subtitle: {
         ...typography.styles.body,
-        color: colors.text.secondary,
+        color: '#555566',
         textAlign: 'center',
         marginBottom: spacing.xl,
     },
@@ -285,95 +302,26 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(214, 104, 83, 0.15)',
         borderColor: colors.accent.error,
     },
+    choiceButtonSelected: {
+        borderWidth: 3,
+        transform: [{ scale: 1.02 }],
+    },
     choiceEmoji: {
         fontSize: 32,
         marginBottom: spacing.sm,
     },
     choiceLabel: {
         ...typography.styles.bodyMedium,
-        color: colors.text.primary,
+        color: '#1A1A3D',
         marginBottom: spacing.xs,
     },
     choiceSubtext: {
         ...typography.styles.caption,
-        color: colors.text.tertiary,
+        color: '#666677',
         textAlign: 'center',
     },
-    // Details step
-    detailsContainer: {
-        flex: 1,
-    },
-    sliderSection: {
-        marginBottom: spacing.xl,
-    },
-    sliderLabel: {
-        ...typography.styles.bodySm,
-        color: colors.text.secondary,
-        marginBottom: spacing.sm,
-    },
-    ratingRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        gap: spacing.sm,
-    },
-    ratingButton: {
-        flex: 1,
-        paddingVertical: spacing.md,
-        backgroundColor: colors.glass.light,
-        borderRadius: borderRadius.md,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'transparent',
-    },
-    ratingButtonActive: {
-        backgroundColor: colors.accent.primary,
-        borderColor: colors.accent.primary,
-    },
-    ratingText: {
-        ...typography.styles.bodyMedium,
-        color: colors.text.secondary,
-    },
-    ratingTextActive: {
-        color: colors.text.inverse,
-    },
-    ratingLabels: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: spacing.xs,
-    },
-    ratingLabelText: {
-        ...typography.styles.caption,
-        color: colors.text.muted,
-    },
-    emojiButton: {
-        flex: 1,
-        paddingVertical: spacing.md,
-        backgroundColor: colors.glass.light,
-        borderRadius: borderRadius.md,
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: 'transparent',
-    },
-    emojiButtonActive: {
-        borderColor: colors.accent.primary,
-        backgroundColor: colors.glass.medium,
-    },
-    emojiText: {
-        fontSize: 24,
-    },
-    notesSection: {
-        marginBottom: spacing.xl,
-    },
-    notesInput: {
-        backgroundColor: colors.glass.light,
-        borderRadius: borderRadius.lg,
-        padding: spacing.md,
-        ...typography.styles.body,
-        color: colors.text.primary,
-        minHeight: 80,
-    },
     submitButton: {
-        marginTop: spacing.sm,
+        marginTop: spacing.lg,
     },
     // Success step
     successContainer: {
@@ -386,12 +334,12 @@ const styles = StyleSheet.create({
     },
     successTitle: {
         ...typography.styles.h2,
-        color: colors.text.primary,
+        color: '#1A1A3D',
         marginBottom: spacing.sm,
     },
     successText: {
         ...typography.styles.body,
-        color: colors.text.secondary,
+        color: '#555566',
     },
     closeButton: {
         alignItems: 'center',
@@ -400,7 +348,41 @@ const styles = StyleSheet.create({
     },
     closeText: {
         ...typography.styles.body,
-        color: colors.text.tertiary,
+        color: '#666677',
+    },
+    // Gram input for gradual plan
+    gramInputContainer: {
+        marginTop: spacing.xl,
+        width: '100%',
+    },
+    gramInputLabel: {
+        ...typography.styles.bodySm,
+        color: '#555566',
+        marginBottom: spacing.sm,
+        textAlign: 'center',
+    },
+    gramInputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.sm,
+    },
+    gramInput: {
+        backgroundColor: '#F0F0F5',
+        borderRadius: borderRadius.lg,
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.md,
+        fontSize: 24,
+        fontWeight: '600',
+        color: '#1A1A3D',
+        textAlign: 'center',
+        width: 100,
+        borderWidth: 1,
+        borderColor: '#E0E0E8',
+    },
+    gramInputUnit: {
+        ...typography.styles.body,
+        color: '#555566',
     },
 });
 

@@ -1,8 +1,7 @@
 /**
  * ScienceFramingScreen
  * 
- * Establishes scientific credibility with brief habit science explanation.
- * Text-focused, calm layout.
+ * Brief science-backed motivation. Sky theme.
  */
 
 import React from 'react';
@@ -10,21 +9,24 @@ import {
     View,
     Text,
     StyleSheet,
-    ScrollView,
     TouchableOpacity,
+    ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, spacing, borderRadius } from '../../theme';
+import { spacing, borderRadius } from '../../theme';
+import LooviBackground, { looviColors } from '../../components/LooviBackground';
+import { GlassCard } from '../../components/GlassCard';
 
 type ScienceFramingScreenProps = {
     navigation: NativeStackNavigationProp<any, 'ScienceFraming'>;
 };
 
-const sciencePoints = [
-    'Sugar cravings are habit-driven, not character flaws.',
-    'Dopamine pathways adapt over time with consistent behavior.',
-    "Progress is cumulative—setbacks don't erase your work.",
+const benefits = [
+    { emoji: '🧠', title: 'Clearer thinking', days: '3-7 days' },
+    { emoji: '⚡', title: 'Stable energy', days: '1-2 weeks' },
+    { emoji: '😴', title: 'Better sleep', days: '2-3 weeks' },
+    { emoji: '💪', title: 'Reduced cravings', days: '3-4 weeks' },
 ];
 
 export default function ScienceFramingScreen({ navigation }: ScienceFramingScreenProps) {
@@ -33,135 +35,168 @@ export default function ScienceFramingScreen({ navigation }: ScienceFramingScree
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-            >
-                {/* Header */}
-                <View style={styles.header}>
-                    <Text style={styles.title}>The science of change</Text>
-                </View>
-
-                {/* Intro paragraph */}
-                <Text style={styles.paragraph}>
-                    Changing your relationship with sugar isn't about willpower.
-                    It's about understanding how habits form and giving your brain
-                    time to adapt.
-                </Text>
-
-                {/* Key points */}
-                <View style={styles.pointsContainer}>
-                    {sciencePoints.map((point, index) => (
-                        <View key={index} style={styles.pointItem}>
-                            <View style={styles.pointNumber}>
-                                <Text style={styles.pointNumberText}>{index + 1}</Text>
-                            </View>
-                            <Text style={styles.pointText}>{point}</Text>
-                        </View>
-                    ))}
-                </View>
-
-                {/* Closing note */}
-                <Text style={styles.closingNote}>
-                    SugarReset tracks your consistency, not perfection.
-                </Text>
-            </ScrollView>
-
-            {/* Fixed Bottom Button */}
-            <View style={styles.bottomContainer}>
-                <TouchableOpacity
-                    style={styles.continueButton}
-                    onPress={handleContinue}
-                    activeOpacity={0.8}
+        <LooviBackground variant="subtle">
+            <SafeAreaView style={styles.container}>
+                <ScrollView
+                    style={styles.scrollView}
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
                 >
-                    <Text style={styles.continueButtonText}>Continue</Text>
-                </TouchableOpacity>
-            </View>
-        </SafeAreaView>
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <Text style={styles.emoji}>🔬</Text>
+                        <Text style={styles.title}>What to expect</Text>
+                        <Text style={styles.subtitle}>
+                            Science-backed timeline of benefits
+                        </Text>
+                    </View>
+
+                    {/* Benefits Timeline */}
+                    <View style={styles.benefitsContainer}>
+                        {benefits.map((benefit, index) => (
+                            <GlassCard key={index} variant="light" padding="md" style={styles.benefitCard}>
+                                <View style={styles.benefitContent}>
+                                    <Text style={styles.benefitEmoji}>{benefit.emoji}</Text>
+                                    <View style={styles.benefitInfo}>
+                                        <Text style={styles.benefitTitle}>{benefit.title}</Text>
+                                        <Text style={styles.benefitDays}>{benefit.days}</Text>
+                                    </View>
+                                    {index < benefits.length - 1 && (
+                                        <View style={styles.connector} />
+                                    )}
+                                </View>
+                            </GlassCard>
+                        ))}
+                    </View>
+
+                    {/* Motivation */}
+                    <GlassCard variant="light" padding="lg" style={styles.motivationCard}>
+                        <Text style={styles.motivationTitle}>Remember</Text>
+                        <Text style={styles.motivationText}>
+                            The first few days are the hardest. Your brain is literally
+                            rewiring itself. Every day without sugar makes the next day easier.
+                        </Text>
+                    </GlassCard>
+                </ScrollView>
+
+                {/* Bottom */}
+                <View style={styles.bottomContainer}>
+                    <TouchableOpacity
+                        style={styles.continueButton}
+                        onPress={handleContinue}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={styles.continueButtonText}>Let's set up my plan</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        </LooviBackground>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background.primary,
     },
     scrollView: {
         flex: 1,
     },
     scrollContent: {
         paddingHorizontal: spacing.screen.horizontal,
-        paddingTop: spacing['3xl'],
-        paddingBottom: spacing.xl,
+        paddingTop: spacing.xl,
+        paddingBottom: spacing.lg,
     },
     header: {
+        alignItems: 'center',
         marginBottom: spacing.xl,
     },
+    emoji: {
+        fontSize: 48,
+        marginBottom: spacing.md,
+    },
     title: {
-        fontSize: 28,
+        fontSize: 26,
         fontWeight: '700',
-        color: colors.text.primary,
-        letterSpacing: -0.5,
+        color: looviColors.text.primary,
+        textAlign: 'center',
+        marginBottom: spacing.sm,
     },
-    paragraph: {
-        fontSize: 17,
+    subtitle: {
+        fontSize: 15,
         fontWeight: '400',
-        color: colors.text.secondary,
-        lineHeight: 26,
-        marginBottom: spacing['2xl'],
+        color: looviColors.text.secondary,
+        textAlign: 'center',
     },
-    pointsContainer: {
-        gap: spacing.lg,
-        marginBottom: spacing['2xl'],
+    benefitsContainer: {
+        gap: spacing.sm,
+        marginBottom: spacing.xl,
     },
-    pointItem: {
+    benefitCard: {},
+    benefitContent: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
-    },
-    pointNumber: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: colors.glass.light,
         alignItems: 'center',
-        justifyContent: 'center',
+    },
+    benefitEmoji: {
+        fontSize: 28,
         marginRight: spacing.md,
     },
-    pointNumberText: {
+    benefitInfo: {
+        flex: 1,
+    },
+    benefitTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: looviColors.text.primary,
+    },
+    benefitDays: {
+        fontSize: 13,
+        fontWeight: '400',
+        color: looviColors.accent.success,
+        marginTop: 2,
+    },
+    connector: {
+        position: 'absolute',
+        left: 20,
+        bottom: -spacing.sm - 2,
+        width: 2,
+        height: spacing.sm,
+        backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    },
+    motivationCard: {
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        borderColor: 'rgba(59, 130, 246, 0.3)',
+    },
+    motivationTitle: {
         fontSize: 14,
         fontWeight: '600',
-        color: colors.text.tertiary,
+        color: looviColors.accent.primary,
+        marginBottom: spacing.sm,
     },
-    pointText: {
-        flex: 1,
-        fontSize: 15,
+    motivationText: {
+        fontSize: 14,
         fontWeight: '400',
-        color: colors.text.secondary,
+        color: looviColors.text.secondary,
         lineHeight: 22,
-        paddingTop: 3,
-    },
-    closingNote: {
-        fontSize: 15,
-        fontWeight: '500',
-        color: colors.text.tertiary,
-        fontStyle: 'italic',
     },
     bottomContainer: {
         paddingHorizontal: spacing.screen.horizontal,
-        paddingTop: spacing.lg,
+        paddingTop: spacing.md,
         paddingBottom: spacing['2xl'],
     },
     continueButton: {
-        backgroundColor: colors.accent.primary,
-        paddingVertical: spacing.lg,
-        borderRadius: 14,
+        backgroundColor: looviColors.accent.primary,
+        paddingVertical: 18,
+        borderRadius: 30,
         alignItems: 'center',
+        shadowColor: looviColors.accent.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 5,
     },
     continueButtonText: {
         fontSize: 17,
         fontWeight: '600',
-        color: colors.text.inverse,
+        color: '#FFFFFF',
     },
 });

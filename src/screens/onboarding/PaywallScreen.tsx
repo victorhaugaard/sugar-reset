@@ -1,65 +1,86 @@
 /**
  * PaywallScreen
  * 
- * Calm, non-aggressive paywall shown after onboarding.
- * Allows starting a free trial or skipping for later.
+ * Subscription options with sky theme.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     TouchableOpacity,
-    Animated,
     ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, spacing, borderRadius } from '../../theme';
+import { spacing, borderRadius } from '../../theme';
+import LooviBackground, { looviColors } from '../../components/LooviBackground';
+import { GlassCard } from '../../components/GlassCard';
 
 type PaywallScreenProps = {
     navigation: NativeStackNavigationProp<any, 'Paywall'>;
 };
 
-const benefits = [
-    'Tree-based progress visualization',
-    'Science-backed insights',
-    'Habit tracking without guilt',
-    'Data-driven approach',
+interface PlanOption {
+    id: string;
+    name: string;
+    price: string;
+    period: string;
+    savings?: string;
+    popular?: boolean;
+}
+
+const plans: PlanOption[] = [
+    {
+        id: 'yearly',
+        name: 'Annual',
+        price: '$29.99',
+        period: '/year',
+        savings: 'Save 75%',
+        popular: true,
+    },
+    {
+        id: 'monthly',
+        name: 'Monthly',
+        price: '$9.99',
+        period: '/month',
+    },
+];
+
+const features = [
+    '✓ Unlimited daily tracking',
+    '✓ Science-based insights',
+    '✓ Personalized recommendations',
+    '✓ Progress analytics',
+    '✓ Community support',
 ];
 
 export default function PaywallScreen({ navigation }: PaywallScreenProps) {
-    // Fade-in animation
-    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const [selectedPlan, setSelectedPlan] = useState('yearly');
 
-    useEffect(() => {
-        Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 600,
-            useNativeDriver: true,
-        }).start();
-    }, []);
-
-    const handleStartTrial = () => {
-        // In a real app, this would initiate the subscription flow
-        navigation.reset({
+    const handleSubscribe = () => {
+        // TODO: Implement subscription
+        navigation.getParent()?.reset({
             index: 0,
-            routes: [{ name: 'Main' as never }],
+            routes: [{ name: 'Main' }],
         });
     };
 
-    const handleMaybeLater = () => {
-        // Skip paywall for now - can reappear later
-        navigation.reset({
+    const handleRestore = () => {
+        // TODO: Implement restore purchases
+    };
+
+    const handleSkip = () => {
+        navigation.getParent()?.reset({
             index: 0,
-            routes: [{ name: 'Main' as never }],
+            routes: [{ name: 'Main' }],
         });
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+        <LooviBackground variant="coralDominant">
+            <SafeAreaView style={styles.container}>
                 <ScrollView
                     style={styles.scrollView}
                     contentContainerStyle={styles.scrollContent}
@@ -67,61 +88,91 @@ export default function PaywallScreen({ navigation }: PaywallScreenProps) {
                 >
                     {/* Header */}
                     <View style={styles.header}>
-                        <Text style={styles.title}>Start your reset</Text>
-                        <Text style={styles.description}>
-                            SugarReset uses habit science and consistency to help reduce sugar cravings.
+                        <Text style={styles.emoji}>🌟</Text>
+                        <Text style={styles.title}>Unlock Your Journey</Text>
+                        <Text style={styles.subtitle}>
+                            Get full access to all premium features
                         </Text>
                     </View>
 
-                    {/* Benefits */}
-                    <View style={styles.benefitsContainer}>
-                        {benefits.map((benefit, index) => (
-                            <View key={index} style={styles.benefitItem}>
-                                <View style={styles.checkmark}>
-                                    <Text style={styles.checkmarkText}>✓</Text>
-                                </View>
-                                <Text style={styles.benefitText}>{benefit}</Text>
-                            </View>
+                    {/* Features */}
+                    <GlassCard variant="light" padding="lg" style={styles.featuresCard}>
+                        {features.map((feature, index) => (
+                            <Text key={index} style={styles.featureText}>{feature}</Text>
                         ))}
+                    </GlassCard>
+
+                    {/* Plans */}
+                    <View style={styles.plansContainer}>
+                        {plans.map((plan) => {
+                            const isSelected = selectedPlan === plan.id;
+                            return (
+                                <TouchableOpacity
+                                    key={plan.id}
+                                    onPress={() => setSelectedPlan(plan.id)}
+                                    activeOpacity={0.8}
+                                    style={styles.planWrapper}
+                                >
+                                    <GlassCard
+                                        variant="light"
+                                        padding="md"
+                                        style={isSelected ? {
+                                            ...styles.planCard,
+                                            ...styles.planCardSelected,
+                                        } : styles.planCard}
+                                    >
+                                        {plan.popular && (
+                                            <View style={styles.popularBadge}>
+                                                <Text style={styles.popularText}>Best Value</Text>
+                                            </View>
+                                        )}
+                                        <Text style={styles.planName}>{plan.name}</Text>
+                                        <View style={styles.priceRow}>
+                                            <Text style={styles.planPrice}>{plan.price}</Text>
+                                            <Text style={styles.planPeriod}>{plan.period}</Text>
+                                        </View>
+                                        {plan.savings && (
+                                            <Text style={styles.planSavings}>{plan.savings}</Text>
+                                        )}
+                                    </GlassCard>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
 
-                    {/* Pricing Card */}
-                    <View style={styles.pricingCard}>
-                        <Text style={styles.trialText}>3-day free trial</Text>
-                        <Text style={styles.priceText}>Then $4.99 / month</Text>
-                        <Text style={styles.cancelText}>Cancel anytime</Text>
-                    </View>
+                    {/* Trial info */}
+                    <Text style={styles.trialInfo}>
+                        Start with a 7-day free trial. Cancel anytime.
+                    </Text>
                 </ScrollView>
 
-                {/* Bottom Actions */}
+                {/* Bottom */}
                 <View style={styles.bottomContainer}>
                     <TouchableOpacity
-                        style={styles.primaryButton}
-                        onPress={handleStartTrial}
+                        style={styles.subscribeButton}
+                        onPress={handleSubscribe}
                         activeOpacity={0.8}
                     >
-                        <Text style={styles.primaryButtonText}>Start free trial</Text>
+                        <Text style={styles.subscribeButtonText}>Start Free Trial</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={styles.secondaryButton}
-                        onPress={handleMaybeLater}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={styles.secondaryButtonText}>Maybe later</Text>
-                    </TouchableOpacity>
+                    <View style={styles.linksRow}>
+                        <TouchableOpacity onPress={handleRestore}>
+                            <Text style={styles.linkText}>Restore Purchases</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.linkDivider}>•</Text>
+                        <TouchableOpacity onPress={handleSkip}>
+                            <Text style={styles.linkText}>Skip for now</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
-            </Animated.View>
-        </SafeAreaView>
+            </SafeAreaView>
+        </LooviBackground>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
-        flex: 1,
-        backgroundColor: colors.background.primary,
-    },
-    content: {
         flex: 1,
     },
     scrollView: {
@@ -129,102 +180,141 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         paddingHorizontal: spacing.screen.horizontal,
-        paddingTop: spacing['3xl'],
+        paddingTop: spacing.xl,
         paddingBottom: spacing.lg,
     },
     header: {
-        marginBottom: spacing['2xl'],
+        alignItems: 'center',
+        marginBottom: spacing.xl,
+    },
+    emoji: {
+        fontSize: 56,
+        marginBottom: spacing.md,
     },
     title: {
         fontSize: 28,
         fontWeight: '700',
-        color: colors.text.primary,
-        letterSpacing: -0.5,
-        marginBottom: spacing.md,
-    },
-    description: {
-        fontSize: 17,
-        fontWeight: '400',
-        color: colors.text.secondary,
-        lineHeight: 24,
-    },
-    benefitsContainer: {
-        marginBottom: spacing['2xl'],
-        gap: spacing.md,
-    },
-    benefitItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    checkmark: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: colors.accent.success + '20',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: spacing.md,
-    },
-    checkmarkText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: colors.accent.success,
-    },
-    benefitText: {
-        flex: 1,
-        fontSize: 15,
-        fontWeight: '400',
-        color: colors.text.secondary,
-    },
-    pricingCard: {
-        backgroundColor: colors.glass.light,
-        borderRadius: borderRadius['2xl'],
-        borderWidth: 1,
-        borderColor: colors.glass.border,
-        padding: spacing.xl,
-        alignItems: 'center',
-    },
-    trialText: {
-        fontSize: 20,
-        fontWeight: '600',
-        color: colors.text.primary,
-        marginBottom: spacing.xs,
-    },
-    priceText: {
-        fontSize: 15,
-        fontWeight: '400',
-        color: colors.text.secondary,
+        color: looviColors.text.primary,
+        textAlign: 'center',
         marginBottom: spacing.sm,
     },
-    cancelText: {
+    subtitle: {
+        fontSize: 15,
+        fontWeight: '400',
+        color: looviColors.text.secondary,
+        textAlign: 'center',
+    },
+    featuresCard: {
+        marginBottom: spacing.xl,
+    },
+    featureText: {
+        fontSize: 15,
+        fontWeight: '400',
+        color: looviColors.text.secondary,
+        marginBottom: spacing.sm,
+    },
+    plansContainer: {
+        flexDirection: 'row',
+        gap: spacing.md,
+        marginBottom: spacing.lg,
+    },
+    planWrapper: {
+        flex: 1,
+        marginTop: 14, // Make room for popular badge
+    },
+    planCard: {
+        alignItems: 'center',
+        position: 'relative',
+        paddingTop: spacing.md,
+        minHeight: 120,
+        overflow: 'visible',
+        backgroundColor: 'transparent', // Fix iOS transparent box issue
+    },
+    planCardSelected: {
+        borderColor: looviColors.accent.primary,
+        backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    },
+    popularBadge: {
+        position: 'absolute',
+        top: -10,
+        backgroundColor: looviColors.accent.success,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: 3,
+        borderRadius: 8,
+    },
+    popularText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#FFFFFF',
+        textTransform: 'uppercase',
+    },
+    planName: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: looviColors.text.tertiary,
+        marginBottom: spacing.xs,
+        marginTop: spacing.sm,
+    },
+    priceRow: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+    },
+    planPrice: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+    },
+    planPeriod: {
+        fontSize: 14,
+        fontWeight: '400',
+        color: looviColors.text.tertiary,
+    },
+    planSavings: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: looviColors.accent.success,
+        marginTop: spacing.xs,
+    },
+    trialInfo: {
         fontSize: 13,
         fontWeight: '400',
-        color: colors.text.tertiary,
+        color: looviColors.text.tertiary,
+        textAlign: 'center',
     },
     bottomContainer: {
         paddingHorizontal: spacing.screen.horizontal,
-        paddingTop: spacing.lg,
+        paddingTop: spacing.md,
         paddingBottom: spacing['2xl'],
-        gap: spacing.md,
     },
-    primaryButton: {
-        backgroundColor: colors.accent.primary,
-        paddingVertical: spacing.lg,
-        borderRadius: 14,
+    subscribeButton: {
+        backgroundColor: looviColors.accent.primary,
+        paddingVertical: 18,
+        borderRadius: 30,
         alignItems: 'center',
+        shadowColor: looviColors.accent.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 5,
+        marginBottom: spacing.lg,
     },
-    primaryButtonText: {
+    subscribeButtonText: {
         fontSize: 17,
-        fontWeight: '600',
-        color: colors.text.inverse,
+        fontWeight: '700',
+        color: '#FFFFFF',
     },
-    secondaryButton: {
-        paddingVertical: spacing.sm,
+    linksRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
         alignItems: 'center',
     },
-    secondaryButtonText: {
-        fontSize: 14,
-        fontWeight: '400',
-        color: colors.text.tertiary,
+    linkText: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: looviColors.text.tertiary,
+    },
+    linkDivider: {
+        marginHorizontal: spacing.md,
+        color: looviColors.text.muted,
     },
 });

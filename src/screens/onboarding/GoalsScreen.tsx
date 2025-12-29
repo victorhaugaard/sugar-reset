@@ -1,0 +1,458 @@
+/**
+ * GoalsScreen
+ * 
+ * User selects their main goals and optionally a savings goal before choosing their approach.
+ * Goals and savings goal are saved to onboarding data and used in HomeScreen.
+ */
+
+import React, { useState, useRef, useEffect } from 'react';
+import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    ScrollView,
+    Animated,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { spacing, borderRadius } from '../../theme';
+import LooviBackground, { looviColors } from '../../components/LooviBackground';
+import { useUserData } from '../../context/UserDataContext';
+import { AnimatedIllustration } from '../../components/AnimatedIllustration';
+
+type GoalsScreenProps = {
+    navigation: NativeStackNavigationProp<any, 'Goals'>;
+};
+
+const GOALS = [
+    { id: 'cravings', emoji: '🍭', label: 'Reduce cravings' },
+    { id: 'energy', emoji: '⚡', label: 'More energy' },
+    { id: 'weight', emoji: '⚖️', label: 'Weight management' },
+    { id: 'health', emoji: '❤️', label: 'Better health' },
+    { id: 'money', emoji: '💵', label: 'Save money' },
+    { id: 'sleep', emoji: '😴', label: 'Better sleep' },
+    { id: 'skin', emoji: '✨', label: 'Clearer skin' },
+    { id: 'mood', emoji: '😊', label: 'Stable mood' },
+];
+
+const SAVINGS_OPTIONS = [
+    { id: 'vacation', emoji: '✈️', label: 'A vacation or trip' },
+    { id: 'gadget', emoji: '📱', label: 'New tech or gadgets' },
+    { id: 'experience', emoji: '🎭', label: 'Experiences & events' },
+    { id: 'savings', emoji: '🏦', label: 'Emergency fund' },
+    { id: 'fitness', emoji: '💪', label: 'Gym or fitness gear' },
+    { id: 'hobby', emoji: '🎨', label: 'A hobby or passion' },
+    { id: 'gift', emoji: '🎁', label: 'Gifts for loved ones' },
+    { id: 'other', emoji: '✨', label: 'Something else' },
+];
+
+export default function GoalsScreen({ navigation }: GoalsScreenProps) {
+    const { onboardingData, updateOnboardingData } = useUserData();
+    const [selectedGoals, setSelectedGoals] = useState<string[]>(onboardingData?.goals || []);
+    const [wantToSave, setWantToSave] = useState<boolean | null>(null);
+    const [selectedSavingsGoal, setSelectedSavingsGoal] = useState<string | null>(null);
+
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(30)).current;
+    const savingsSlide = useRef(new Animated.Value(20)).current;
+    const savingsFade = useRef(new Animated.Value(0)).current;
+
+    // Calculate potential savings
+    const dailySpending = onboardingData?.dailySpendingCents || 300;
+    const monthlyTotal = Math.round((dailySpending * 30) / 100);
+
+    useEffect(() => {
+        Animated.parallel([
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 500,
+                useNativeDriver: true,
+            }),
+            Animated.timing(slideAnim, {
+                toValue: 0,
+                duration: 500,
+                useNativeDriver: true,
+            }),
+        ]).start();
+    }, []);
+
+    // Animate savings options when user says yes
+    useEffect(() => {
+        if (wantToSave === true) {
+            Animated.parallel([
+                Animated.timing(savingsFade, {
+                    toValue: 1,
+                    duration: 400,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(savingsSlide, {
+                    toValue: 0,
+                    duration: 400,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        }
+    }, [wantToSave]);
+
+    const toggleGoal = (goalId: string) => {
+        setSelectedGoals(prev => {
+            if (prev.includes(goalId)) {
+                return prev.filter(id => id !== goalId);
+            }
+            return [...prev, goalId];
+        });
+    };
+
+    const handleContinue = async () => {
+        // Save goals
+        await updateOnboardingData({ goals: selectedGoals });
+
+        // Save savings goal if selected
+        if (wantToSave && selectedSavingsGoal) {
+            const goal = SAVINGS_OPTIONS.find(g => g.id === selectedSavingsGoal);
+            await updateOnboardingData({
+                savingsGoal: goal?.label || selectedSavingsGoal,
+                savingsGoalAmount: monthlyTotal * 6, // 6-month goal
+            });
+        }
+
+        navigation.navigate('PlanSelection');
+    };
+
+    // Can proceed if goals selected AND (not interested in savings OR savings goal selected)
+    const canProceed = selectedGoals.length > 0 && (wantToSave === false || (wantToSave === true && selectedSavingsGoal !== null));
+
+    return (
+        <LooviBackground variant="blueBottom">
+            <SafeAreaView style={styles.container}>
+                <ScrollView
+                    style={styles.scrollView}
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    <Animated.View
+                        style={{
+                            opacity: fadeAnim,
+                            transform: [{ translateY: slideAnim }],
+                        }}
+                    >
+                        {/* Goals Header */}
+                        <View style={styles.header}>
+                            <AnimatedIllustration name="🎯" size={100} animation="breathe" />
+                            <Text style={styles.title}>What are your main goals?</Text>
+                            <Text style={styles.subtitle}>Select all that apply</Text>
+                        </View>
+
+                        {/* Goals List - Single Column */}
+                        <View style={styles.goalsContainer}>
+                            {GOALS.map((goal) => {
+                                const isSelected = selectedGoals.includes(goal.id);
+                                return (
+                                    <TouchableOpacity
+                                        key={goal.id}
+                                        style={[
+                                            styles.goalCard,
+                                            isSelected && styles.goalCardSelected,
+                                        ]}
+                                        onPress={() => toggleGoal(goal.id)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={styles.goalEmoji}>{goal.emoji}</Text>
+                                        <Text style={[
+                                            styles.goalLabel,
+                                            isSelected && styles.goalLabelSelected,
+                                        ]}>
+                                            {goal.label}
+                                        </Text>
+                                        {isSelected && (
+                                            <View style={styles.checkmark}>
+                                                <Text style={styles.checkmarkText}>✓</Text>
+                                            </View>
+                                        )}
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+
+                        {/* Savings Question - Only show after goals selected */}
+                        {selectedGoals.length > 0 && (
+                            <View style={styles.savingsSection}>
+                                <Text style={styles.savingsTitle}>💰 Want to save money for something special?</Text>
+                                <Text style={styles.savingsSubtitle}>
+                                    You could save up to ${monthlyTotal}/month
+                                </Text>
+
+                                <View style={styles.yesNoContainer}>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.yesNoButton,
+                                            wantToSave === true && styles.yesNoButtonSelected,
+                                        ]}
+                                        onPress={() => setWantToSave(true)}
+                                    >
+                                        <Text style={[
+                                            styles.yesNoText,
+                                            wantToSave === true && styles.yesNoTextSelected,
+                                        ]}>Yes!</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.yesNoButton,
+                                            wantToSave === false && styles.yesNoButtonSelected,
+                                        ]}
+                                        onPress={() => setWantToSave(false)}
+                                    >
+                                        <Text style={[
+                                            styles.yesNoText,
+                                            wantToSave === false && styles.yesNoTextSelected,
+                                        ]}>Not now</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                {/* Savings Options - Animate in when Yes */}
+                                {wantToSave === true && (
+                                    <Animated.View
+                                        style={{
+                                            opacity: savingsFade,
+                                            transform: [{ translateY: savingsSlide }],
+                                        }}
+                                    >
+                                        <Text style={styles.savingsOptionsTitle}>What would you save for?</Text>
+                                        <View style={styles.savingsOptionsContainer}>
+                                            {SAVINGS_OPTIONS.map((option) => (
+                                                <TouchableOpacity
+                                                    key={option.id}
+                                                    style={[
+                                                        styles.savingsOption,
+                                                        selectedSavingsGoal === option.id && styles.savingsOptionSelected,
+                                                    ]}
+                                                    onPress={() => setSelectedSavingsGoal(option.id)}
+                                                >
+                                                    <Text style={styles.savingsOptionEmoji}>{option.emoji}</Text>
+                                                    <Text style={[
+                                                        styles.savingsOptionLabel,
+                                                        selectedSavingsGoal === option.id && styles.savingsOptionLabelSelected,
+                                                    ]}>
+                                                        {option.label}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </Animated.View>
+                                )}
+                            </View>
+                        )}
+                    </Animated.View>
+                </ScrollView>
+
+                {/* Continue Button */}
+                <View style={styles.footer}>
+                    <TouchableOpacity
+                        style={[
+                            styles.continueButton,
+                            !canProceed && styles.continueButtonDisabled,
+                        ]}
+                        onPress={handleContinue}
+                        disabled={!canProceed}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={styles.continueButtonText}>Continue</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        </LooviBackground>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+    },
+    scrollView: {
+        flex: 1,
+    },
+    scrollContent: {
+        paddingHorizontal: spacing.screen.horizontal,
+        paddingTop: spacing.xl,
+        paddingBottom: 120,
+    },
+    header: {
+        alignItems: 'center',
+        marginBottom: spacing.lg,
+    },
+    emoji: {
+        fontSize: 48,
+        marginBottom: spacing.md,
+    },
+    title: {
+        fontSize: 26,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        textAlign: 'center',
+        marginBottom: spacing.sm,
+    },
+    subtitle: {
+        fontSize: 15,
+        fontWeight: '400',
+        color: looviColors.text.secondary,
+        textAlign: 'center',
+    },
+    goalsContainer: {
+        gap: spacing.sm,
+        marginBottom: spacing.xl,
+    },
+    goalCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.7)',
+        borderRadius: borderRadius.xl,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.lg,
+        borderWidth: 2,
+        borderColor: 'transparent',
+    },
+    goalCardSelected: {
+        backgroundColor: 'rgba(217, 123, 102, 0.1)',
+        borderColor: looviColors.accent.primary,
+    },
+    goalEmoji: {
+        fontSize: 24,
+        marginRight: spacing.md,
+    },
+    goalLabel: {
+        flex: 1,
+        fontSize: 16,
+        fontWeight: '600',
+        color: looviColors.text.primary,
+    },
+    goalLabelSelected: {
+        color: looviColors.accent.primary,
+    },
+    checkmark: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: looviColors.accent.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    checkmarkText: {
+        fontSize: 14,
+        color: '#fff',
+        fontWeight: '700',
+    },
+    // Savings Section
+    savingsSection: {
+        marginTop: spacing.md,
+        paddingTop: spacing.lg,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0,0,0,0.08)',
+    },
+    savingsTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        textAlign: 'center',
+        marginBottom: spacing.xs,
+    },
+    savingsSubtitle: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: looviColors.accent.success,
+        textAlign: 'center',
+        marginBottom: spacing.md,
+    },
+    yesNoContainer: {
+        flexDirection: 'row',
+        gap: spacing.md,
+        marginBottom: spacing.lg,
+    },
+    yesNoButton: {
+        flex: 1,
+        paddingVertical: spacing.md,
+        borderRadius: borderRadius.xl,
+        backgroundColor: 'rgba(255,255,255,0.7)',
+        borderWidth: 2,
+        borderColor: 'transparent',
+        alignItems: 'center',
+    },
+    yesNoButtonSelected: {
+        backgroundColor: 'rgba(217, 123, 102, 0.1)',
+        borderColor: looviColors.accent.primary,
+    },
+    yesNoText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: looviColors.text.primary,
+    },
+    yesNoTextSelected: {
+        color: looviColors.accent.primary,
+    },
+    savingsOptionsTitle: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: looviColors.text.secondary,
+        textAlign: 'center',
+        marginBottom: spacing.md,
+    },
+    savingsOptionsContainer: {
+        gap: spacing.sm,
+    },
+    savingsOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.6)',
+        borderRadius: borderRadius.lg,
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.md,
+        borderWidth: 2,
+        borderColor: 'transparent',
+    },
+    savingsOptionSelected: {
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        borderColor: '#3B82F6',
+    },
+    savingsOptionEmoji: {
+        fontSize: 20,
+        marginRight: spacing.sm,
+    },
+    savingsOptionLabel: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: looviColors.text.primary,
+    },
+    savingsOptionLabelSelected: {
+        color: '#3B82F6',
+    },
+    // Footer
+    footer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        paddingHorizontal: spacing.screen.horizontal,
+        paddingBottom: spacing.xl,
+        paddingTop: spacing.md,
+        backgroundColor: 'rgba(255,250,245,0.95)',
+    },
+    continueButton: {
+        backgroundColor: looviColors.accent.primary,
+        paddingVertical: 18,
+        borderRadius: 30,
+        alignItems: 'center',
+        shadowColor: looviColors.coralOrange,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
+        elevation: 5,
+    },
+    continueButtonDisabled: {
+        opacity: 0.5,
+    },
+    continueButtonText: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
+});

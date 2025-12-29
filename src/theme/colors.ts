@@ -1,76 +1,78 @@
 /**
- * SugarReset Color Palette
+ * SugarReset Color Palette - Universe Theme
  * 
- * Calm, authoritative, data-focused design inspired by WHOOP.
- * Matte, desaturated colors with warm accent tones.
+ * Deep, cosmic aesthetic inspired by QUITTR/STOPPR.
+ * Dark indigo backgrounds, electric purple accents, and starry vibes.
  */
 
 export const colors = {
-  // Primary backgrounds - matte, calm
+  // Primary backgrounds - Deep Universe
   background: {
-    primary: '#0D0F12',      // Deep dark (main bg)
-    secondary: '#14171C',     // Elevated surfaces
-    tertiary: '#1A1E25',      // Cards, modals
-    warm: '#15130F',          // Warm variant
+    primary: '#050511',      // Deepest Space (Main bg)
+    secondary: '#0F0F26',    // Dark Indigo (Cards)
+    tertiary: '#1A1A3D',     // Lighter Indigo (Modals)
+    warm: '#0B0B26',         // (Mapped to dark indigo for compatibility)
   },
 
-  // Glassmorphism overlays
+  // Glassmorphism overlays - Cool, blue-tinted
   glass: {
-    light: 'rgba(255, 255, 255, 0.05)',
-    medium: 'rgba(255, 255, 255, 0.08)',
-    strong: 'rgba(255, 255, 255, 0.12)',
-    border: 'rgba(255, 255, 255, 0.1)',
+    light: 'rgba(50, 50, 100, 0.15)',
+    medium: 'rgba(50, 50, 100, 0.25)',
+    strong: 'rgba(50, 50, 100, 0.40)',
+    border: 'rgba(100, 100, 255, 0.15)',
   },
 
   // Text hierarchy
   text: {
-    primary: '#F7F7F5',       // Main headings
-    secondary: '#A1A1A1',     // Body text
-    tertiary: '#6B6B6B',      // Subtle text
-    muted: '#4A4A4A',         // Disabled/hints
-    inverse: '#0D0F12',       // On light backgrounds
+    primary: '#FFFFFF',       // Pure White
+    secondary: '#B0B0D0',     // Blue-grey (Stardust)
+    tertiary: '#707090',      // Muted indigo
+    muted: '#4A4A6A',         // Disabled
+    inverse: '#050511',       // On bright buttons
   },
 
-  // Accent colors - warm, organic
+  // Accent colors - Electric, Neon
   accent: {
-    primary: '#E8A87C',       // Warm coral/peach (main CTA)
-    secondary: '#D4956F',     // Deeper coral
-    tertiary: '#C08162',      // Muted warm
-    success: '#7FB069',       // Calm green (progress)
-    warning: '#E5B654',       // Muted gold
-    error: '#D66853',         // Soft red
+    primary: '#A020F0',       // Electric Purple (Main CTA) - matching screenshot
+    secondary: '#D44DFF',     // Lighter Neon Purple
+    tertiary: '#7000B0',      // Deep Purple
+    success: '#00E0FF',       // Cyan/Electric Blue (Progress/Success)
+    warning: '#FFD700',       // Gold (Stars)
+    error: '#FF2D55',         // Neon Red
   },
 
-  // Gradient stops for organic backgrounds
+  // Gradient stops
   gradients: {
-    warmStart: '#1A1510',
-    warmEnd: '#0D0F12',
-    coralStart: 'rgba(232, 168, 124, 0.15)',
-    coralEnd: 'rgba(232, 168, 124, 0.02)',
-    successStart: 'rgba(127, 176, 105, 0.12)',
-    successEnd: 'rgba(127, 176, 105, 0.02)',
+    warmStart: '#0B0B26',     // (Mapped to universe)
+    warmEnd: '#050511',
+    universeStart: '#141432', // Top of screen
+    universeEnd: '#050511',   // Bottom of screen
+    coralStart: 'rgba(160, 32, 240, 0.2)', // Purple glow
+    coralEnd: 'rgba(160, 32, 240, 0.0)',
+    successStart: 'rgba(0, 224, 255, 0.2)', // Cyan glow
+    successEnd: 'rgba(0, 224, 255, 0.0)',
   },
 
   // Progress ring colors
   progress: {
-    ring: '#E8A87C',
-    ringBg: 'rgba(232, 168, 124, 0.15)',
-    success: '#7FB069',
-    successBg: 'rgba(127, 176, 105, 0.15)',
+    ring: '#A020F0',          // Purple
+    ringBg: 'rgba(160, 32, 240, 0.2)',
+    success: '#00E0FF',       // Cyan
+    successBg: 'rgba(0, 224, 255, 0.2)',
   },
 
   // Utility
   border: {
-    subtle: 'rgba(255, 255, 255, 0.06)',
-    light: 'rgba(255, 255, 255, 0.1)',
-    focus: 'rgba(232, 168, 124, 0.4)',
+    subtle: 'rgba(255, 255, 255, 0.08)',
+    light: 'rgba(255, 255, 255, 0.15)',
+    focus: 'rgba(160, 32, 240, 0.6)',
   },
 
   // Status indicators
   status: {
-    active: '#7FB069',
-    inactive: '#4A4A4A',
-    pending: '#E5B654',
+    active: '#00E0FF',
+    inactive: '#4A4A6A',
+    pending: '#FFD700',
   },
 } as const;
 

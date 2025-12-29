@@ -1,8 +1,7 @@
 /**
- * InsightsScreen
+ * ScienceScreen (Insights)
  * 
- * Scrollable list of science-based habit insights.
- * Each insight displayed in a GlassCard.
+ * Scrollable list of science-based insights with universe background.
  */
 
 import React from 'react';
@@ -14,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius } from '../theme';
+import { UniverseBackground } from '../components';
 
 interface Insight {
     id: string;
@@ -73,35 +73,36 @@ function InsightCard({ insight }: { insight: Insight }) {
     );
 }
 
-export default function InsightsScreen() {
+export default function ScienceScreen() {
     return (
-        <SafeAreaView style={styles.container}>
-            <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-            >
-                {/* Header */}
-                <View style={styles.header}>
-                    <Text style={styles.title}>Insights</Text>
-                    <Text style={styles.subtitle}>Science-based habit knowledge</Text>
-                </View>
+        <UniverseBackground showParticles={false}>
+            <SafeAreaView style={styles.container}>
+                <ScrollView
+                    style={styles.scrollView}
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <Text style={styles.title}>Insights</Text>
+                        <Text style={styles.subtitle}>Science-based habit knowledge</Text>
+                    </View>
 
-                {/* Insight Cards */}
-                <View style={styles.cardsContainer}>
-                    {insights.map((insight) => (
-                        <InsightCard key={insight.id} insight={insight} />
-                    ))}
-                </View>
-            </ScrollView>
-        </SafeAreaView>
+                    {/* Insight Cards */}
+                    <View style={styles.cardsContainer}>
+                        {insights.map((insight) => (
+                            <InsightCard key={insight.id} insight={insight} />
+                        ))}
+                    </View>
+                </ScrollView>
+            </SafeAreaView>
+        </UniverseBackground>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background.primary,
     },
     scrollView: {
         flex: 1,

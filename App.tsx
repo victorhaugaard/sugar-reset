@@ -9,6 +9,7 @@ import { StatusBar } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
+import { UserDataProvider } from './src/context/UserDataContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { colors } from './src/theme';
 
@@ -21,9 +22,12 @@ export default function App() {
           backgroundColor={colors.background.primary}
         />
         <AuthProvider>
-          <RootNavigator />
+          <UserDataProvider>
+            <RootNavigator />
+          </UserDataProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
+

@@ -36,6 +36,7 @@ export interface DailyCheckIn {
     userId: string;
     date: string; // YYYY-MM-DD format
     sugarFree: boolean;
+    grams?: number; // Sugar intake in grams (for gradual plan)
     notes?: string;
     cravingLevel?: 1 | 2 | 3 | 4 | 5; // 1 = none, 5 = intense
     mood?: 1 | 2 | 3 | 4 | 5; // 1 = poor, 5 = excellent
@@ -70,6 +71,9 @@ export type RootStackParamList = {
     Onboarding: undefined;
     Auth: undefined;
     Main: undefined;
+    Reasons: undefined; // Anti-relapse reasons screen
+    BreathingExercise: undefined; // Guided breathing exercise
+    Journal: undefined; // Journal entries screen
 };
 
 export type AuthStackParamList = {
@@ -80,18 +84,44 @@ export type AuthStackParamList = {
 };
 
 export type OnboardingStackParamList = {
-    Launch: undefined;
+    // Phase 1: Quiz
+    Welcome: undefined;
+    QuizIntro: undefined;
+    ComprehensiveQuiz: undefined;
+
+    // Phase 2: Education & Social Proof
+    SugarDangers: undefined;
+    SugarestWelcome: undefined;
+    SuccessStories: undefined;
+    FeatureShowcase: undefined;
+
+    // Phase 3: Commitment
+    Goals: undefined;
+    PlanSelection: undefined;
+    Promise: { nickname?: string };
+    Paywall: undefined;
+
+    // Legacy (keep for backwards compatibility)
+    QualificationQuiz: undefined;
+    SugarProfile: undefined;
+    SugarIntake: undefined;
+    SugarScience: undefined;
+    AppBenefits: undefined;
     IntentSelection: undefined;
     SugarDefinition: undefined;
     ScienceFraming: undefined;
     BaselineSetup: undefined;
-    Paywall: undefined;
+    SugarSpending: { dailySugarGrams?: number };
+    SavingsGoal: { dailySpendingCents?: number; dailySugarGrams?: number };
+    Nickname: undefined;
+    Launch: undefined;
 };
 
 export type MainTabParamList = {
     Home: undefined;
-    Progress: undefined;
-    Science: undefined;
+    Analytics: undefined;
+    Library: undefined;
+    Alternatives: undefined;
     Profile: undefined;
 };
 

@@ -1,7 +1,7 @@
 /**
- * Login Screen
+ * LoginScreen
  * 
- * Email/password sign in form.
+ * User login with sky theme.
  */
 
 import React, { useState } from 'react';
@@ -9,209 +9,223 @@ import {
     View,
     Text,
     StyleSheet,
-    StatusBar,
     TouchableOpacity,
+    TextInput,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { AuthStackParamList } from '../../types';
-import { Button, Input, GlassCard } from '../../components';
-import { useAuth } from '../../hooks/useAuth';
-import { colors, typography, spacing } from '../../theme';
+import { spacing, borderRadius } from '../../theme';
+import LooviBackground, { looviColors } from '../../components/LooviBackground';
+import { GlassCard } from '../../components/GlassCard';
 
 type LoginScreenProps = {
-    navigation: NativeStackNavigationProp<AuthStackParamList, 'Login'>;
+    navigation: NativeStackNavigationProp<any, 'Login'>;
 };
 
 export default function LoginScreen({ navigation }: LoginScreenProps) {
-    const { signIn, isLoading, error, clearError } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [validationErrors, setValidationErrors] = useState<{
-        email?: string;
-        password?: string;
-    }>({});
-
-    const validate = (): boolean => {
-        const errors: { email?: string; password?: string } = {};
-
-        if (!email) {
-            errors.email = 'Email is required';
-        } else if (!/\S+@\S+\.\S+/.test(email)) {
-            errors.email = 'Please enter a valid email';
-        }
-
-        if (!password) {
-            errors.password = 'Password is required';
-        }
-
-        setValidationErrors(errors);
-        return Object.keys(errors).length === 0;
-    };
+    const [loading, setLoading] = useState(false);
 
     const handleLogin = async () => {
-        clearError();
-        if (!validate()) return;
-
-        const success = await signIn(email, password);
-        if (success) {
-            // Navigation will be handled by auth state change
-        }
+        setLoading(true);
+        // TODO: Implement login
+        setTimeout(() => {
+            setLoading(false);
+            navigation.getParent()?.reset({
+                index: 0,
+                routes: [{ name: 'Main' }],
+            });
+        }, 1000);
     };
 
+    const handleForgotPassword = () => {
+        navigation.navigate('ForgotPassword');
+    };
+
+    const handleSignUp = () => {
+        navigation.navigate('SignUp');
+    };
+
+    const isValid = email.includes('@') && password.length >= 6;
+
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" />
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={styles.keyboardView}
-            >
-                <ScrollView
-                    contentContainerStyle={styles.scrollContent}
-                    keyboardShouldPersistTaps="handled"
+        <LooviBackground variant="coralTop">
+            <SafeAreaView style={styles.container}>
+                <KeyboardAvoidingView
+                    style={styles.keyboardView}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 >
-                    {/* Header */}
-                    <View style={styles.header}>
-                        <TouchableOpacity onPress={() => navigation.goBack()}>
-                            <Text style={styles.backButton}>← Back</Text>
-                        </TouchableOpacity>
-                    </View>
+                    <ScrollView
+                        style={styles.scrollView}
+                        contentContainerStyle={styles.scrollContent}
+                        showsVerticalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
+                    >
+                        {/* Header */}
+                        <View style={styles.header}>
+                            <Text style={styles.emoji}>👋</Text>
+                            <Text style={styles.title}>Welcome back</Text>
+                            <Text style={styles.subtitle}>Sign in to continue your journey</Text>
+                        </View>
 
-                    {/* Title */}
-                    <View style={styles.titleSection}>
-                        <Text style={styles.title}>Welcome back</Text>
-                        <Text style={styles.subtitle}>Sign in to continue your journey</Text>
-                    </View>
-
-                    {/* Form */}
-                    <GlassCard style={styles.formCard} padding="lg">
-                        {error && (
-                            <View style={styles.errorBanner}>
-                                <Text style={styles.errorText}>{error.message}</Text>
+                        {/* Form */}
+                        <GlassCard variant="light" padding="lg" style={styles.formCard}>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputLabel}>Email</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    placeholder="your@email.com"
+                                    placeholderTextColor={looviColors.text.muted}
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                />
                             </View>
-                        )}
 
-                        <Input
-                            label="Email"
-                            value={email}
-                            onChangeText={setEmail}
-                            placeholder="your@email.com"
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            autoComplete="email"
-                            error={validationErrors.email}
-                        />
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputLabel}>Password</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    placeholder="••••••••"
+                                    placeholderTextColor={looviColors.text.muted}
+                                    secureTextEntry
+                                    autoCapitalize="none"
+                                />
+                            </View>
 
-                        <Input
-                            label="Password"
-                            value={password}
-                            onChangeText={setPassword}
-                            placeholder="Enter your password"
-                            secureTextEntry
-                            autoComplete="password"
-                            error={validationErrors.password}
-                        />
+                            <TouchableOpacity onPress={handleForgotPassword}>
+                                <Text style={styles.forgotText}>Forgot password?</Text>
+                            </TouchableOpacity>
+                        </GlassCard>
 
+                        {/* Login Button */}
                         <TouchableOpacity
-                            onPress={() => navigation.navigate('ForgotPassword')}
-                            style={styles.forgotPassword}
-                        >
-                            <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-                        </TouchableOpacity>
-
-                        <Button
-                            title="Sign In"
+                            style={[styles.loginButton, !isValid && styles.loginButtonDisabled]}
                             onPress={handleLogin}
-                            loading={isLoading}
-                            fullWidth
-                            style={styles.submitButton}
-                        />
-                    </GlassCard>
-
-                    {/* Sign Up Link */}
-                    <View style={styles.signUpSection}>
-                        <Text style={styles.signUpText}>Don't have an account? </Text>
-                        <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
-                            <Text style={styles.signUpLink}>Sign up</Text>
+                            disabled={!isValid || loading}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.loginButtonText}>
+                                {loading ? 'Signing in...' : 'Sign In'}
+                            </Text>
                         </TouchableOpacity>
-                    </View>
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </SafeAreaView>
+
+                        {/* Sign Up Link */}
+                        <View style={styles.signUpRow}>
+                            <Text style={styles.signUpText}>Don't have an account? </Text>
+                            <TouchableOpacity onPress={handleSignUp}>
+                                <Text style={styles.signUpLink}>Sign Up</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            </SafeAreaView>
+        </LooviBackground>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background.primary,
     },
     keyboardView: {
         flex: 1,
     },
+    scrollView: {
+        flex: 1,
+    },
     scrollContent: {
-        flexGrow: 1,
         paddingHorizontal: spacing.screen.horizontal,
+        paddingTop: spacing['2xl'],
+        paddingBottom: spacing['2xl'],
     },
     header: {
-        paddingTop: spacing.md,
-        paddingBottom: spacing.xl,
+        alignItems: 'center',
+        marginBottom: spacing['2xl'],
     },
-    backButton: {
-        ...typography.styles.body,
-        color: colors.accent.primary,
-    },
-    titleSection: {
-        marginBottom: spacing.xl,
+    emoji: {
+        fontSize: 48,
+        marginBottom: spacing.md,
     },
     title: {
-        ...typography.styles.h1,
-        color: colors.text.primary,
-        marginBottom: spacing.xs,
+        fontSize: 28,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        marginBottom: spacing.sm,
     },
     subtitle: {
-        ...typography.styles.body,
-        color: colors.text.secondary,
+        fontSize: 15,
+        fontWeight: '400',
+        color: looviColors.text.secondary,
     },
     formCard: {
         marginBottom: spacing.xl,
     },
-    errorBanner: {
-        backgroundColor: 'rgba(214, 104, 83, 0.15)',
-        borderRadius: 8,
-        padding: spacing.md,
-        marginBottom: spacing.base,
-    },
-    errorText: {
-        ...typography.styles.bodySm,
-        color: colors.accent.error,
-    },
-    forgotPassword: {
-        alignSelf: 'flex-end',
-        marginTop: -spacing.sm,
+    inputGroup: {
         marginBottom: spacing.lg,
     },
-    forgotPasswordText: {
-        ...typography.styles.bodySm,
-        color: colors.accent.primary,
+    inputLabel: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: looviColors.text.secondary,
+        marginBottom: spacing.sm,
     },
-    submitButton: {
-        marginTop: spacing.sm,
+    input: {
+        backgroundColor: 'rgba(0, 0, 0, 0.05)',
+        borderRadius: borderRadius.lg,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.md,
+        fontSize: 16,
+        fontWeight: '400',
+        color: looviColors.text.primary,
     },
-    signUpSection: {
+    forgotText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: looviColors.accent.primary,
+        textAlign: 'right',
+    },
+    loginButton: {
+        backgroundColor: looviColors.accent.primary,
+        paddingVertical: 18,
+        borderRadius: 30,
+        alignItems: 'center',
+        marginBottom: spacing.xl,
+        shadowColor: looviColors.accent.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 5,
+    },
+    loginButtonDisabled: {
+        backgroundColor: 'rgba(0, 0, 0, 0.1)',
+        shadowOpacity: 0,
+    },
+    loginButtonText: {
+        fontSize: 17,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
+    signUpRow: {
         flexDirection: 'row',
         justifyContent: 'center',
-        paddingVertical: spacing.lg,
     },
     signUpText: {
-        ...typography.styles.body,
-        color: colors.text.secondary,
+        fontSize: 14,
+        fontWeight: '400',
+        color: looviColors.text.tertiary,
     },
     signUpLink: {
-        ...typography.styles.bodyMedium,
-        color: colors.accent.primary,
+        fontSize: 14,
+        fontWeight: '600',
+        color: looviColors.accent.primary,
     },
 });
