@@ -54,8 +54,8 @@ export default function ScannedItemCard({
                 <GlassCard variant="light" padding="sm" style={styles.compactCard}>
                     <Image source={{ uri: item.imageUri }} style={styles.compactImage} />
                     <Text style={styles.compactName} numberOfLines={1}>{item.name}</Text>
-                    <Text style={[styles.compactSugar, { color: getSugarColor(item.sugarGrams) }]}>
-                        {item.sugarGrams}g
+                    <Text style={[styles.compactSugar, { color: getSugarColor(item.sugar) }]}>
+                        {item.sugar}g
                     </Text>
                 </GlassCard>
             </TouchableOpacity>
@@ -72,8 +72,8 @@ export default function ScannedItemCard({
                         <Text style={styles.date}>{formatDate(item.timestamp)}</Text>
                     </View>
                     <View style={styles.sugarContainer}>
-                        <Text style={[styles.sugarValue, { color: getSugarColor(item.sugarGrams) }]}>
-                            {item.sugarGrams}g
+                        <Text style={[styles.sugarValue, { color: getSugarColor(item.sugar) }]}>
+                            {item.sugar}g
                         </Text>
                         <Text style={styles.sugarLabel}>sugar</Text>
                     </View>

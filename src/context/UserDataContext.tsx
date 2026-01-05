@@ -57,6 +57,8 @@ interface UserDataContextType {
 
     // Journal methods
     addJournalEntry: (date: Date, entry: Omit<JournalEntry, 'id' | 'date' | 'createdAt'>) => Promise<void>;
+    updateJournalEntry: (id: string, updates: Partial<Omit<JournalEntry, 'id' | 'createdAt'>>) => Promise<void>;
+    deleteJournalEntry: (id: string) => Promise<void>;
     getLatestJournalEntry: () => JournalEntry | null;
     getJournalEntries: (limit?: number) => JournalEntry[];
 }
@@ -341,6 +343,18 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
         return journalEntries.slice(0, limit);
     }, [journalEntries]);
 
+    const updateJournalEntry = useCallback(async (id: string, updates: Partial<Omit<JournalEntry, 'id' | 'createdAt'>>) => {
+        setJournalEntries(prev => prev.map(entry =>
+            entry.id === id ? { ...entry, ...updates } : entry
+        ));
+        // TODO: Persist to AsyncStorage and sync to Firebase
+    }, []);
+
+    const deleteJournalEntry = useCallback(async (id: string) => {
+        setJournalEntries(prev => prev.filter(entry => entry.id !== id));
+        // TODO: Persist to AsyncStorage and sync to Firebase
+    }, []);
+
     const value: UserDataContextType = {
         onboardingData,
         hasCompletedOnboarding,
@@ -358,6 +372,8 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
         resetStreak,
         unlockAchievements,
         addJournalEntry,
+        updateJournalEntry,
+        deleteJournalEntry,
         getLatestJournalEntry,
         getJournalEntries,
     };

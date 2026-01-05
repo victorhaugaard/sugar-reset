@@ -30,7 +30,18 @@ import PlanDetailsModal from '../components/PlanDetailsModal';
 import { CheckInModal } from '../components/CheckInModal';
 import { JournalWidget } from '../components/JournalWidget';
 import { SwipeableTabView } from '../components/SwipeableTabView';
+import JournalEntryModal from '../components/JournalEntryModal';
+import FoodScannerModal from '../components/FoodScannerModal';
 import { getTodayGuidance, PlanType, getPlanDetails, getCurrentWeek } from '../utils/planUtils';
+import { PlanProgressBar } from '../components/PlanProgressBar';
+import { WellnessTracker, WellnessData } from '../components/WellnessTracker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppIcon } from '../components/OnboardingIcon';
+import { getScannedItems, ScannedItem } from '../services/scannerService';
+import {
+    aggregateHealthData,
+    WellnessMetrics as HealthWellnessMetrics,
+} from '../services/healthScoringService';
 
 function formatDuration(ms: number) {
     const seconds = Math.floor((ms / 1000) % 60);
@@ -53,6 +64,19 @@ export default function HomeScreen() {
     const [showEditReasonsModal, setShowEditReasonsModal] = useState(false);
     const [editSavingsGoal, setEditSavingsGoal] = useState('');
     const [editReasons, setEditReasons] = useState<string[]>([]);
+    const [showPledgeModal, setShowPledgeModal] = useState(false);
+    const [hasPledgedToday, setHasPledgedToday] = useState(false);
+    const [wellnessAverages, setWellnessAverages] = useState<WellnessData | null>(null);
+    const [hasFoodLoggedToday, setHasFoodLoggedToday] = useState(false);
+    const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
+    const [showJournalModal, setShowJournalModal] = useState(false);
+    const [showTrackModal, setShowTrackModal] = useState(false);
+    const [showFoodScannerModal, setShowFoodScannerModal] = useState(false);
+    const [showWellnessModal, setShowWellnessModal] = useState(false);
+    const [wellnessMood, setWellnessMood] = useState(3);
+    const [wellnessEnergy, setWellnessEnergy] = useState(3);
+    const [wellnessFocus, setWellnessFocus] = useState(3);
+    const [wellnessSleep, setWellnessSleep] = useState(7);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
     const fallbackDateRef = useRef(new Date().toISOString()); // Stable fallback
     const navigation = useNavigation<any>(); // Type as any to allow navigation to new modal screens
@@ -67,6 +91,7 @@ export default function HomeScreen() {
         recordCheckInForDate,
         getLatestJournalEntry,
         updateOnboardingData,
+        addJournalEntry,
     } = useUserData();
 
     // Get user data from context (with fallbacks)
@@ -119,6 +144,71 @@ export default function HomeScreen() {
         };
     }, [startDate]);
 
+    // Load 7-day wellness averages with real date-based filtering
+    // Refresh when wellness modal is closed
+    useEffect(() => {
+        const loadWellnessAverages = async () => {
+            try {
+                const [stored, foodItems] = await Promise.all([
+                    AsyncStorage.getItem('wellness_logs'),
+                    getScannedItems(),
+                ]);
+
+                setScannedItems(foodItems);
+
+                if (stored) {
+                    const logs = JSON.parse(stored);
+
+                    // Filter last 7 days by actual date
+                    const cutoffDate = new Date();
+                    cutoffDate.setDate(cutoffDate.getDate() - 7);
+
+                    const recentLogs = logs.filter((log: any) =>
+                        new Date(log.date) >= cutoffDate
+                    );
+
+                    if (recentLogs.length > 0) {
+                        const avgMood = recentLogs.reduce((sum: number, l: any) => sum + l.mood, 0) / recentLogs.length;
+                        const avgEnergy = recentLogs.reduce((sum: number, l: any) => sum + l.energy, 0) / recentLogs.length;
+                        const avgFocus = recentLogs.reduce((sum: number, l: any) => sum + l.focus, 0) / recentLogs.length;
+                        const avgSleep = recentLogs.reduce((sum: number, l: any) => sum + l.sleepHours, 0) / recentLogs.length;
+                        setWellnessAverages({
+                            mood: avgMood,
+                            energy: avgEnergy,
+                            focus: avgFocus,
+                            sleep: avgSleep,
+                        });
+                    } else {
+                        setWellnessAverages(null);
+                    }
+                } else {
+                    setWellnessAverages(null);
+                }
+            } catch (error) {
+                console.error('Error loading wellness averages:', error);
+                setWellnessAverages(null);
+            }
+        };
+        loadWellnessAverages();
+    }, [showWellnessModal]); // Reload when wellness modal closes
+
+    // Check if food has been logged today
+    useEffect(() => {
+        const checkFoodLogged = async () => {
+            try {
+                const items = await getScannedItems();
+                const today = new Date().toISOString().split('T')[0];
+                const hasLoggedToday = items.some(item =>
+                    item.timestamp.split('T')[0] === today
+                );
+                setHasFoodLoggedToday(hasLoggedToday);
+            } catch (error) {
+                console.error('Error checking food log:', error);
+            }
+        };
+        checkFoodLogged();
+    }, []);
+
     const duration = formatDuration(timeElapsed);
     const daysSugarFree = duration.days;
 
@@ -129,6 +219,32 @@ export default function HomeScreen() {
 
     const handlePanicButton = () => {
         setShowPanicModal(true);
+    };
+
+    const handleWellnessSave = async () => {
+        try {
+            const log = {
+                date: new Date().toISOString().split('T')[0],
+                mood: wellnessMood,
+                energy: wellnessEnergy,
+                focus: wellnessFocus,
+                sleepHours: wellnessSleep,
+            };
+            const stored = await AsyncStorage.getItem('wellness_logs');
+            const logs = stored ? JSON.parse(stored) : [];
+            const existingIndex = logs.findIndex((l: any) => l.date === log.date);
+
+            if (existingIndex >= 0) {
+                logs[existingIndex] = log;
+            } else {
+                logs.unshift(log);
+            }
+
+            await AsyncStorage.setItem('wellness_logs', JSON.stringify(logs));
+            setShowWellnessModal(false);
+        } catch (error) {
+            console.error('Failed to save wellness log:', error);
+        }
     };
 
     const handleCheckIn = () => {
@@ -267,7 +383,10 @@ export default function HomeScreen() {
                         <View style={styles.timerSection}>
                             {/* Streak Badge - Above Number */}
                             <View style={styles.streakBadge}>
-                                <Text style={styles.streakText}>🔥 Sugar-free streak</Text>
+                                <View style={styles.streakRow}>
+                                    <AppIcon emoji="🔥" size={16} />
+                                    <Text style={styles.streakText}> Sugar-free streak</Text>
+                                </View>
                             </View>
 
                             <Text style={styles.daysNumber}>{daysSugarFree}</Text>
@@ -301,155 +420,58 @@ export default function HomeScreen() {
                             <View style={styles.separatorLine} />
                         </View>
 
-                        {/* Stats Row */}
-                        <View style={styles.statsRow}>
-                            {/* Money Saved */}
-                            <GlassCard variant="light" padding="md" style={styles.statCard}>
-                                <Text style={styles.statEmoji}>💰</Text>
-                                <Text style={styles.statValue}>${moneySaved}</Text>
-                                <Text style={styles.statLabel}>saved</Text>
-                            </GlassCard>
-
-                            {/* Sugar Avoided */}
-                            <GlassCard variant="light" padding="md" style={styles.statCard}>
-                                <Text style={styles.statEmoji}>🍬</Text>
-                                <Text style={styles.statValue}>{sugarAvoided}g</Text>
-                                <Text style={styles.statLabel}>avoided</Text>
-                            </GlassCard>
-                        </View>
-
-                        {/* Week Calendar Strip */}
-                        <WeekStrip
-                            checkIns={checkInHistory}
-                            onDayPress={handleDayPress}
-                            startDate={startDate}
+                        {/* Plan Progress Bar */}
+                        <PlanProgressBar
+                            daysSinceStart={daysSugarFree}
+                            planDuration={planType === 'cold_turkey' ? 30 : 42}
+                            endDate={new Date(startDate.getTime() + (planType === 'cold_turkey' ? 30 : 42) * 24 * 60 * 60 * 1000)}
                         />
 
-                        {/* Action Row: Check-in + Panic Button */}
+                        {/* Action Buttons: Pledge, Logging, Journal */}
                         <View style={styles.actionRow}>
-                            {/* Daily Check-in */}
+                            {/* Pledge Button */}
                             <TouchableOpacity
                                 activeOpacity={0.8}
-                                onPress={handleCheckIn}
-                                style={styles.actionButton}
+                                onPress={() => setShowPledgeModal(true)}
+                                style={styles.tripleActionButton}
                             >
-                                <GlassCard
-                                    variant="light"
-                                    padding="sm"
-                                    style={{
-                                        ...styles.actionCard,
-                                        ...(hasCheckedInToday && styles.checkInCardDone),
-                                    }}
-                                >
-                                    <View style={styles.actionContent}>
-                                        <Text style={styles.actionEmoji}>✅</Text>
-                                        <View style={styles.actionTextContainer}>
-                                            <Text style={styles.actionTitle}>Daily Check-in</Text>
-                                            <Text style={styles.actionSubtitle}>
-                                                {hasCheckedInToday ? 'Done ✓' : 'Log today'}
-                                            </Text>
-                                        </View>
-                                    </View>
+                                <GlassCard variant="light" padding="sm" style={[styles.tripleActionCard, { backgroundColor: hasPledgedToday ? 'rgba(34, 197, 94, 0.15)' : 'rgba(217, 123, 102, 0.15)' }]}>
+                                    <AppIcon emoji={hasPledgedToday ? "✅" : "🤝"} size={24} />
+                                    <Text style={[styles.tripleActionLabel, hasPledgedToday && { color: '#22C55E' }]}>
+                                        {hasPledgedToday ? 'Pledged' : 'Pledge'}
+                                    </Text>
                                 </GlassCard>
                             </TouchableOpacity>
 
-                            {/* Panic Button */}
+                            {/* Track Button - Quick Log access */}
                             <TouchableOpacity
                                 activeOpacity={0.8}
-                                onPress={handlePanicButton}
-                                style={styles.actionButton}
+                                onPress={() => setShowTrackModal(true)}
+                                style={styles.tripleActionButton}
                             >
-                                <GlassCard variant="light" padding="sm" style={styles.actionCard}>
-                                    <View style={styles.actionContent}>
-                                        <Text style={styles.actionEmoji}>🆘</Text>
-                                        <View style={styles.actionTextContainer}>
-                                            <Text style={styles.actionTitle}>Craving sugar?</Text>
-                                            <Text style={styles.actionSubtitle}>Get support</Text>
-                                        </View>
-                                    </View>
+                                <GlassCard variant="light" padding="sm" style={[styles.tripleActionCard, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
+                                    <AppIcon emoji="📊" size={24} />
+                                    <Text style={styles.tripleActionLabel}>Track</Text>
+                                </GlassCard>
+                            </TouchableOpacity>
+
+                            {/* Journal Button */}
+                            <TouchableOpacity
+                                activeOpacity={0.8}
+                                onPress={() => setShowJournalModal(true)}
+                                style={styles.tripleActionButton}
+                            >
+                                <GlassCard variant="light" padding="sm" style={[styles.tripleActionCard, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
+                                    <AppIcon emoji="📓" size={24} />
+                                    <Text style={styles.tripleActionLabel}>Journal</Text>
                                 </GlassCard>
                             </TouchableOpacity>
                         </View>
 
-                        {/* Plan Guidance Card */}
-                        <GlassCard
-                            variant="light"
-                            padding="md"
-                            style={styles.planGuidanceCard}
-                        >
-                            <View style={styles.planGuidanceHeader}>
-                                <Text style={styles.planGuidanceEmoji}>
-                                    {planType === 'cold_turkey' ? '🎯' : '📉'}
-                                </Text>
-                                <View style={styles.planGuidanceInfo}>
-                                    <Text style={styles.planGuidanceTitle}>
-                                        {planType === 'cold_turkey' ? 'Cold Turkey' : 'Gradual Reduction'}
-                                    </Text>
-                                    <Text style={styles.planGuidanceWeek}>
-                                        {guidance.isComplete ? 'Maintenance mode' : `Week ${guidance.weekNumber}`}
-                                    </Text>
-                                </View>
-                                {planType === 'gradual' && (
-                                    <View style={styles.gramLimit}>
-                                        <Text style={styles.gramLimitValue}>{guidance.limit}g</Text>
-                                        <Text style={styles.gramLimitLabel}>daily limit</Text>
-                                    </View>
-                                )}
-                            </View>
-                            <Text style={styles.planGuidanceTip}>💡 {guidance.tip}</Text>
+                        {/* 7-Day Wellness Averages */}
+                        {wellnessAverages && <WellnessTracker averages={wellnessAverages} />}
 
-                            {/* My Plan Button */}
-                            <TouchableOpacity
-                                style={styles.myPlanButton}
-                                onPress={() => setShowPlanDetails(true)}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={styles.myPlanButtonText}>📖 My Plan Details</Text>
-                            </TouchableOpacity>
-                        </GlassCard>
 
-                        {/* Journal Widget - Always visible */}
-                        <JournalWidget
-                            entry={getLatestJournalEntry()}
-                            onPress={() => navigation.navigate('Journal')}
-                        />
-
-                        {/* Your Reasons Section */}
-                        <TouchableOpacity activeOpacity={0.8} onPress={handleEditReasons}>
-                            <View style={styles.reasonsSection}>
-                                <View style={styles.sectionHeader}>
-                                    <Text style={styles.sectionTitle}>Why you started</Text>
-                                    <Text style={styles.editIcon}>✏️</Text>
-                                </View>
-                                <View style={styles.reasonsContainer}>
-                                    {reasons.map((reason: string, index: number) => (
-                                        <GlassCard key={index} variant="light" padding="md" style={styles.reasonCard}>
-                                            <Text style={styles.reasonText}>{reason}</Text>
-                                        </GlassCard>
-                                    ))}
-                                </View>
-                            </View>
-                        </TouchableOpacity>
-
-                        {/* Savings Goal - Now below Reasons */}
-                        <TouchableOpacity activeOpacity={0.8} onPress={handleEditSavings}>
-                            <GlassCard variant="light" padding="md" style={styles.goalCard}>
-                                <View style={styles.goalHeader}>
-                                    <Text style={styles.goalLabel}>Saving for</Text>
-                                    <View style={styles.goalHeaderRight}>
-                                        <Text style={styles.editIcon}>✏️</Text>
-                                        <Text style={styles.goalEmoji}>✈️</Text>
-                                    </View>
-                                </View>
-                                <Text style={styles.goalTitle}>{savingsGoal}</Text>
-                                <View style={styles.goalProgress}>
-                                    <View style={styles.goalProgressBar}>
-                                        <View style={[styles.goalProgressFill, { width: `${Math.min((moneySavedCents / (savingsGoalAmount * 100)) * 100, 100)}%` }]} />
-                                    </View>
-                                    <Text style={styles.goalProgressText}>${moneySaved} / ${savingsGoalAmount} goal</Text>
-                                </View>
-                            </GlassCard>
-                        </TouchableOpacity>
                     </ScrollView>
 
                     {/* Panic Modal */}
@@ -571,7 +593,7 @@ export default function HomeScreen() {
                                         style={styles.checkInStatusButton}
                                         onPress={() => {
                                             setShowCheckInStatusModal(false);
-                                            navigation.navigate('Journal');
+                                            navigation.navigate('Track', { tab: 'journal' });
                                         }}
                                     >
                                         <Text style={styles.checkInStatusButtonText}>📝 Add Journal</Text>
@@ -636,58 +658,259 @@ export default function HomeScreen() {
                         </TouchableOpacity>
                     </Modal>
 
-                    {/* Edit Reasons Modal */}
+
+
+                    {/* Pledge Modal */}
                     <Modal
-                        visible={showEditReasonsModal}
+                        visible={showPledgeModal}
                         transparent
                         animationType="fade"
-                        onRequestClose={() => setShowEditReasonsModal(false)}
+                        onRequestClose={() => setShowPledgeModal(false)}
                     >
                         <TouchableOpacity
                             style={styles.modalOverlay}
                             activeOpacity={1}
-                            onPress={() => setShowEditReasonsModal(false)}
+                            onPress={() => setShowPledgeModal(false)}
                         >
-                            <TouchableOpacity activeOpacity={1} style={styles.editModalContent}>
-                                <Text style={styles.editModalTitle}>Why you started</Text>
-                                <ScrollView style={{ maxHeight: 300 }}>
-                                    {editReasons.map((reason, index) => (
-                                        <View key={index} style={styles.reasonEditRow}>
-                                            <TextInput
-                                                style={styles.reasonEditInput}
-                                                value={reason}
-                                                onChangeText={(text) => updateReason(index, text)}
-                                                placeholder="Your reason..."
-                                                placeholderTextColor={looviColors.text.muted}
-                                            />
-                                            <TouchableOpacity
-                                                style={styles.removeReasonButton}
-                                                onPress={() => removeReason(index)}
-                                            >
-                                                <Text style={styles.removeReasonText}>✕</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    ))}
-                                </ScrollView>
-                                <TouchableOpacity style={styles.addReasonButton} onPress={addReason}>
-                                    <Text style={styles.addReasonText}>+ Add another reason</Text>
-                                </TouchableOpacity>
-                                <View style={styles.editModalButtons}>
-                                    <TouchableOpacity
-                                        style={styles.editCancelButton}
-                                        onPress={() => setShowEditReasonsModal(false)}
-                                    >
-                                        <Text style={styles.editCancelText}>Cancel</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={styles.editSaveButton}
-                                        onPress={handleSaveReasons}
-                                    >
-                                        <Text style={styles.editSaveText}>Save</Text>
-                                    </TouchableOpacity>
+                            <TouchableOpacity activeOpacity={1} style={styles.pledgeModalContent}>
+                                <View style={styles.pledgeEmojiContainer}>
+                                    <AppIcon emoji="🤝" size={48} />
                                 </View>
+                                <Text style={styles.pledgeTitle}>Make Your Pledge</Text>
+                                <Text style={styles.pledgeDescription}>
+                                    Today, I commit to being sugar-free. One day at a time, I'm building a healthier future for myself.
+                                </Text>
+
+                                {hasPledgedToday ? (
+                                    <View style={styles.pledgeCompletedContainer}>
+                                        <AppIcon emoji="✅" size={24} />
+                                        <Text style={styles.pledgeCompletedText}>You've made your pledge today!</Text>
+                                    </View>
+                                ) : (
+                                    <TouchableOpacity
+                                        style={styles.pledgeButton}
+                                        onPress={() => {
+                                            setHasPledgedToday(true);
+                                            setTimeout(() => setShowPledgeModal(false), 1000);
+                                        }}
+                                    >
+                                        <Text style={styles.pledgeButtonText}>I Pledge to Stay Sugar-Free</Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                <TouchableOpacity
+                                    style={styles.pledgeSecondaryButton}
+                                    onPress={() => navigation.navigate('Reasons')}
+                                >
+                                    <Text style={styles.pledgeSecondaryText}>View My Reasons</Text>
+                                </TouchableOpacity>
                             </TouchableOpacity>
                         </TouchableOpacity>
+                    </Modal>
+
+                    {/* Journal Entry Modal */}
+                    <JournalEntryModal
+                        visible={showJournalModal}
+                        onClose={() => setShowJournalModal(false)}
+                        onSave={async (entry) => {
+                            await addJournalEntry(new Date(), entry);
+                            setShowJournalModal(false);
+                        }}
+                    />
+
+                    {/* Track Options Modal */}
+                    <Modal
+                        visible={showTrackModal}
+                        transparent
+                        animationType="fade"
+                        onRequestClose={() => setShowTrackModal(false)}
+                    >
+                        <TouchableOpacity
+                            style={styles.modalOverlay}
+                            activeOpacity={1}
+                            onPress={() => setShowTrackModal(false)}
+                        >
+                            <TouchableOpacity activeOpacity={1} style={styles.trackModalContent}>
+                                <Text style={styles.trackModalTitle}>Quick Track</Text>
+                                <Text style={styles.trackModalSubtitle}>What would you like to log?</Text>
+
+                                <TouchableOpacity
+                                    style={styles.trackOptionButton}
+                                    onPress={() => {
+                                        setShowTrackModal(false);
+                                        setShowFoodScannerModal(true);
+                                    }}
+                                >
+                                    <AppIcon emoji="🍎" size={32} />
+                                    <View style={styles.trackOptionText}>
+                                        <Text style={styles.trackOptionTitle}>What have you eaten?</Text>
+                                        <Text style={styles.trackOptionSubtitle}>Scan or log your food</Text>
+                                    </View>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={styles.trackOptionButton}
+                                    onPress={() => {
+                                        setShowTrackModal(false);
+                                        setShowWellnessModal(true);
+                                    }}
+                                >
+                                    <AppIcon emoji="💭" size={32} />
+                                    <View style={styles.trackOptionText}>
+                                        <Text style={styles.trackOptionTitle}>How are you feeling?</Text>
+                                        <Text style={styles.trackOptionSubtitle}>Log your wellness</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            </TouchableOpacity>
+                        </TouchableOpacity>
+                    </Modal>
+
+                    {/* Food Scanner Modal */}
+                    <FoodScannerModal
+                        visible={showFoodScannerModal}
+                        onClose={() => setShowFoodScannerModal(false)}
+                        onScanComplete={() => {
+                            setShowFoodScannerModal(false);
+                            // Refresh food logged status
+                            getScannedItems().then(items => {
+                                const today = new Date().toISOString().split('T')[0];
+                                const hasLoggedToday = items.some(item =>
+                                    item.timestamp.split('T')[0] === today
+                                );
+                                setHasFoodLoggedToday(hasLoggedToday);
+                            });
+                        }}
+                    />
+
+                    {/* Wellness Modal */}
+                    <Modal
+                        visible={showWellnessModal}
+                        transparent
+                        animationType="fade"
+                        onRequestClose={() => setShowWellnessModal(false)}
+                    >
+                        <View style={styles.modalOverlay}>
+                            <View style={styles.wellnessModalContent}>
+                                <TouchableOpacity
+                                    style={styles.wellnessCloseButton}
+                                    onPress={() => setShowWellnessModal(false)}
+                                >
+                                    <Text style={styles.wellnessCloseText}>✕</Text>
+                                </TouchableOpacity>
+
+                                <Text style={styles.wellnessTitle}>How are you feeling?</Text>
+                                <Text style={styles.wellnessSubtitle}>Rate your wellness today</Text>
+
+                                <ScrollView showsVerticalScrollIndicator={false} style={styles.wellnessScrollView}>
+                                    {/* Mood */}
+                                    <View style={styles.wellnessScaleContainer}>
+                                        <View style={styles.wellnessScaleHeader}>
+                                            <AppIcon emoji="😊" size={20} />
+                                            <Text style={styles.wellnessScaleLabel}>Mood</Text>
+                                        </View>
+                                        <View style={styles.wellnessScaleButtons}>
+                                            {[1, 2, 3, 4, 5].map(n => (
+                                                <TouchableOpacity
+                                                    key={n}
+                                                    style={[
+                                                        styles.wellnessScaleButton,
+                                                        wellnessMood === n && styles.wellnessScaleButtonActive
+                                                    ]}
+                                                    onPress={() => setWellnessMood(n)}
+                                                >
+                                                    <Text style={[
+                                                        styles.wellnessScaleButtonText,
+                                                        wellnessMood === n && styles.wellnessScaleButtonTextActive
+                                                    ]}>{n}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+
+                                    {/* Energy */}
+                                    <View style={styles.wellnessScaleContainer}>
+                                        <View style={styles.wellnessScaleHeader}>
+                                            <AppIcon emoji="⚡" size={20} />
+                                            <Text style={styles.wellnessScaleLabel}>Energy</Text>
+                                        </View>
+                                        <View style={styles.wellnessScaleButtons}>
+                                            {[1, 2, 3, 4, 5].map(n => (
+                                                <TouchableOpacity
+                                                    key={n}
+                                                    style={[
+                                                        styles.wellnessScaleButton,
+                                                        wellnessEnergy === n && styles.wellnessScaleButtonActive
+                                                    ]}
+                                                    onPress={() => setWellnessEnergy(n)}
+                                                >
+                                                    <Text style={[
+                                                        styles.wellnessScaleButtonText,
+                                                        wellnessEnergy === n && styles.wellnessScaleButtonTextActive
+                                                    ]}>{n}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+
+                                    {/* Focus */}
+                                    <View style={styles.wellnessScaleContainer}>
+                                        <View style={styles.wellnessScaleHeader}>
+                                            <AppIcon emoji="🧠" size={20} />
+                                            <Text style={styles.wellnessScaleLabel}>Focus</Text>
+                                        </View>
+                                        <View style={styles.wellnessScaleButtons}>
+                                            {[1, 2, 3, 4, 5].map(n => (
+                                                <TouchableOpacity
+                                                    key={n}
+                                                    style={[
+                                                        styles.wellnessScaleButton,
+                                                        wellnessFocus === n && styles.wellnessScaleButtonActive
+                                                    ]}
+                                                    onPress={() => setWellnessFocus(n)}
+                                                >
+                                                    <Text style={[
+                                                        styles.wellnessScaleButtonText,
+                                                        wellnessFocus === n && styles.wellnessScaleButtonTextActive
+                                                    ]}>{n}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+
+                                    {/* Sleep */}
+                                    <View style={styles.wellnessScaleContainer}>
+                                        <View style={styles.wellnessScaleHeader}>
+                                            <AppIcon emoji="😴" size={20} />
+                                            <Text style={styles.wellnessScaleLabel}>Hours of Sleep</Text>
+                                        </View>
+                                        <View style={styles.wellnessSleepButtons}>
+                                            {[5, 6, 7, 8, 9, 10].map(h => (
+                                                <TouchableOpacity
+                                                    key={h}
+                                                    style={[
+                                                        styles.wellnessSleepButton,
+                                                        wellnessSleep === h && styles.wellnessSleepButtonActive
+                                                    ]}
+                                                    onPress={() => setWellnessSleep(h)}
+                                                >
+                                                    <Text style={[
+                                                        styles.wellnessSleepButtonText,
+                                                        wellnessSleep === h && styles.wellnessSleepButtonTextActive
+                                                    ]}>{h}h</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+                                </ScrollView>
+
+                                <TouchableOpacity
+                                    style={styles.wellnessSaveButton}
+                                    onPress={handleWellnessSave}
+                                >
+                                    <Text style={styles.wellnessSaveButtonText}>Save How I'm Feeling</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
                     </Modal>
                 </SafeAreaView>
             </LooviBackground>
@@ -790,6 +1013,10 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '600',
         color: '#D97706',
+    },
+    streakRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     separatorLine: {
         width: '80%',
@@ -1418,6 +1645,262 @@ const styles = StyleSheet.create({
     },
     editSaveText: {
         fontSize: 15,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
+    // Triple Action Buttons (Pledge, Logging, Journal)
+    tripleActionButton: {
+        flex: 1,
+    },
+    tripleActionCard: {
+        alignItems: 'center',
+        paddingVertical: spacing.md,
+    },
+    tripleActionEmoji: {
+        fontSize: 24,
+        marginBottom: 4,
+    },
+    tripleActionLabel: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: looviColors.text.primary,
+    },
+    // Pledge Modal styles
+    pledgeModalContent: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: borderRadius['2xl'],
+        padding: spacing.xl,
+        width: '100%',
+        maxWidth: 340,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.15,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    pledgeEmojiContainer: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: 'rgba(217, 123, 102, 0.15)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: spacing.md,
+    },
+    pledgeTitle: {
+        fontSize: 22,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        textAlign: 'center',
+        marginBottom: spacing.sm,
+    },
+    pledgeDescription: {
+        fontSize: 15,
+        color: looviColors.text.secondary,
+        textAlign: 'center',
+        lineHeight: 22,
+        marginBottom: spacing.lg,
+    },
+    pledgeCompletedContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        borderRadius: borderRadius.lg,
+        marginBottom: spacing.md,
+    },
+    pledgeCompletedText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#22C55E',
+    },
+    pledgeButton: {
+        backgroundColor: looviColors.accent.primary,
+        paddingVertical: 16,
+        paddingHorizontal: spacing.xl,
+        borderRadius: 30,
+        width: '100%',
+        alignItems: 'center',
+        marginBottom: spacing.md,
+        shadowColor: looviColors.coralOrange,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    pledgeButtonText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
+    pledgeSecondaryButton: {
+        paddingVertical: spacing.sm,
+    },
+    pledgeSecondaryText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: looviColors.accent.primary,
+    },
+    // Track Modal Styles
+    trackModalContent: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: borderRadius['2xl'],
+        padding: spacing.xl,
+        width: '100%',
+        maxWidth: 340,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.15,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    trackModalTitle: {
+        fontSize: 22,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        textAlign: 'center',
+        marginBottom: spacing.xs,
+    },
+    trackModalSubtitle: {
+        fontSize: 14,
+        fontWeight: '400',
+        color: looviColors.text.secondary,
+        textAlign: 'center',
+        marginBottom: spacing.xl,
+    },
+    trackOptionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: spacing.lg,
+        backgroundColor: 'rgba(0, 0, 0, 0.03)',
+        borderRadius: borderRadius.xl,
+        marginBottom: spacing.md,
+    },
+    trackOptionText: {
+        marginLeft: spacing.md,
+        flex: 1,
+    },
+    trackOptionTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: looviColors.text.primary,
+    },
+    trackOptionSubtitle: {
+        fontSize: 13,
+        fontWeight: '400',
+        color: looviColors.text.tertiary,
+        marginTop: 2,
+    },
+    // Wellness Modal Styles
+    wellnessModalContent: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: borderRadius['2xl'],
+        padding: spacing.xl,
+        width: '90%',
+        maxWidth: 400,
+        maxHeight: '80%',
+    },
+    wellnessCloseButton: {
+        position: 'absolute',
+        top: spacing.md,
+        right: spacing.md,
+        width: 32,
+        height: 32,
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10,
+    },
+    wellnessCloseText: {
+        fontSize: 20,
+        color: looviColors.text.tertiary,
+    },
+    wellnessTitle: {
+        fontSize: 22,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        textAlign: 'center',
+        marginBottom: spacing.xs,
+    },
+    wellnessSubtitle: {
+        fontSize: 14,
+        fontWeight: '400',
+        color: looviColors.text.secondary,
+        textAlign: 'center',
+        marginBottom: spacing.xl,
+    },
+    wellnessScrollView: {
+        maxHeight: 400,
+    },
+    wellnessScaleContainer: {
+        marginBottom: spacing.lg,
+    },
+    wellnessScaleHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: spacing.sm,
+    },
+    wellnessScaleLabel: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: looviColors.text.primary,
+        marginLeft: spacing.sm,
+    },
+    wellnessScaleButtons: {
+        flexDirection: 'row',
+        gap: spacing.sm,
+    },
+    wellnessScaleButton: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: borderRadius.lg,
+        backgroundColor: 'rgba(0, 0, 0, 0.05)',
+        alignItems: 'center',
+    },
+    wellnessScaleButtonActive: {
+        backgroundColor: looviColors.accent.primary,
+    },
+    wellnessScaleButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: looviColors.text.secondary,
+    },
+    wellnessScaleButtonTextActive: {
+        color: '#FFFFFF',
+    },
+    wellnessSleepButtons: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing.sm,
+    },
+    wellnessSleepButton: {
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: borderRadius.lg,
+        backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    },
+    wellnessSleepButtonActive: {
+        backgroundColor: looviColors.accent.primary,
+    },
+    wellnessSleepButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: looviColors.text.secondary,
+    },
+    wellnessSleepButtonTextActive: {
+        color: '#FFFFFF',
+    },
+    wellnessSaveButton: {
+        backgroundColor: looviColors.accent.primary,
+        paddingVertical: 14,
+        borderRadius: borderRadius.xl,
+        alignItems: 'center',
+        marginTop: spacing.md,
+    },
+    wellnessSaveButtonText: {
+        fontSize: 16,
         fontWeight: '600',
         color: '#FFFFFF',
     },

@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { ActivityIndicator, View, StyleSheet, Platform } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Platform, Text } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -45,9 +45,10 @@ import {
 // Main Screens
 import HomeScreen from '../screens/HomeScreen';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
-import LibraryScreen from '../screens/LibraryScreen';
-import AlternativesScreen from '../screens/AlternativesScreen';
+import TrackingScreen from '../screens/TrackingScreen';
+import PanicScreen from '../screens/PanicScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import SocialScreen from '../screens/SocialScreen';
 
 // Support/Modal Screens
 import ReasonsScreen from '../screens/ReasonsScreen';
@@ -97,6 +98,53 @@ function MainTabNavigator() {
                 }}
             />
             <Tab.Screen
+                name="Track"
+                component={TrackingScreen}
+                options={{
+                    tabBarLabel: 'Track',
+                    tabBarIcon: ({ color, focused }) => (
+                        <Feather name="layers" size={22} color={color} style={{ opacity: focused ? 1 : 0.6 }} />
+                    ),
+                }}
+            />
+            <Tab.Screen
+                name="Panic"
+                component={PanicScreen}
+                options={{
+                    tabBarLabel: '',
+                    tabBarIcon: ({ focused }) => (
+                        <View style={{
+                            alignItems: 'center',
+                            marginBottom: 20,
+                        }}>
+                            <View style={{
+                                width: 56,
+                                height: 56,
+                                borderRadius: 28,
+                                backgroundColor: focused ? '#EF4444' : '#D97B66',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                shadowColor: '#EF4444',
+                                shadowOffset: { width: 0, height: 4 },
+                                shadowOpacity: 0.35,
+                                shadowRadius: 8,
+                                elevation: 8,
+                                borderWidth: 4,
+                                borderColor: '#FFFFFF',
+                            }}>
+                                <Feather name="heart" size={26} color="#FFFFFF" />
+                            </View>
+                            <Text style={{
+                                fontSize: 10,
+                                fontWeight: '600',
+                                color: focused ? '#EF4444' : '#6B7280',
+                                marginTop: 4,
+                            }}>CRAVING</Text>
+                        </View>
+                    ),
+                }}
+            />
+            <Tab.Screen
                 name="Analytics"
                 component={AnalyticsScreen}
                 options={{
@@ -106,33 +154,14 @@ function MainTabNavigator() {
                     ),
                 }}
             />
+
             <Tab.Screen
-                name="Alternatives"
-                component={AlternativesScreen}
+                name="Social"
+                component={SocialScreen}
                 options={{
-                    tabBarLabel: 'Scan',
+                    tabBarLabel: 'Social',
                     tabBarIcon: ({ color, focused }) => (
-                        <Feather name="camera" size={22} color={color} style={{ opacity: focused ? 1 : 0.6 }} />
-                    ),
-                }}
-            />
-            <Tab.Screen
-                name="Library"
-                component={LibraryScreen}
-                options={{
-                    tabBarLabel: 'Library',
-                    tabBarIcon: ({ color, focused }) => (
-                        <Feather name="book-open" size={22} color={color} style={{ opacity: focused ? 1 : 0.6 }} />
-                    ),
-                }}
-            />
-            <Tab.Screen
-                name="Profile"
-                component={ProfileScreen}
-                options={{
-                    tabBarLabel: 'Profile',
-                    tabBarIcon: ({ color, focused }) => (
-                        <Feather name="user" size={22} color={color} style={{ opacity: focused ? 1 : 0.6 }} />
+                        <Feather name="users" size={22} color={color} style={{ opacity: focused ? 1 : 0.6 }} />
                     ),
                 }}
             />
@@ -235,8 +264,20 @@ export default function RootNavigator() {
                     name="Journal"
                     component={JournalScreen}
                     options={{
+                        presentation: 'modal',
+                        animation: 'slide_from_bottom',
+                    }}
+                />
+                <RootStack.Screen
+                    name="Profile"
+                    component={ProfileScreen}
+                    options={{
                         presentation: 'card',
                         animation: 'slide_from_right',
+                        headerShown: true,
+                        headerTitle: '',
+                        headerTransparent: true,
+                        headerTintColor: colors.text.primary,
                     }}
                 />
             </RootStack.Navigator>

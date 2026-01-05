@@ -1,8 +1,8 @@
 /**
  * FoodScannerModal
  * 
- * Modal for scanning food items to detect sugar content.
- * Uses expo-image-picker for camera/gallery access.
+ * Modal for scanning food items with full macro analysis.
+ * New workflow: Photo → Optional description → AI Analysis → Confirmation/Edit → Portion → Save
  */
 
 import React, { useState } from 'react';
@@ -15,17 +15,24 @@ import {
     Image,
     ActivityIndicator,
     Alert,
+    TextInput,
+    ScrollView,
+    KeyboardAvoidingView,
+    Platform,
+    Keyboard,
+    TouchableWithoutFeedback,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import Slider from '@react-native-community/slider';
 import { spacing, borderRadius } from '../theme';
 import { looviColors } from './LooviBackground';
-import { GlassCard } from './GlassCard';
 import {
     analyzeFood,
     saveScannedItem,
     generateScanId,
     ScannedItem,
     AnalysisResult,
+    getHealthScoreColor,
 } from '../services/scannerService';
 
 interface FoodScannerModalProps {
@@ -34,7 +41,7 @@ interface FoodScannerModalProps {
     onScanComplete: (item: ScannedItem) => void;
 }
 
-type ScanStep = 'select' | 'analyzing' | 'result';
+type ScanStep = 'select' | 'describe' | 'analyzing' | 'result';
 
 export default function FoodScannerModal({
     visible,
@@ -43,12 +50,20 @@ export default function FoodScannerModal({
 }: FoodScannerModalProps) {
     const [step, setStep] = useState<ScanStep>('select');
     const [imageUri, setImageUri] = useState<string | null>(null);
+    const [description, setDescription] = useState('');
     const [result, setResult] = useState<AnalysisResult | null>(null);
+    const [portionPercent, setPortionPercent] = useState(100);
+    const [editedName, setEditedName] = useState('');
+    const [isEditing, setIsEditing] = useState(false);
 
     const resetState = () => {
         setStep('select');
         setImageUri(null);
+        setDescription('');
         setResult(null);
+        setPortionPercent(100);
+        setEditedName('');
+        setIsEditing(false);
     };
 
     const handleClose = () => {
@@ -81,7 +96,8 @@ export default function FoodScannerModal({
         });
 
         if (!result.canceled && result.assets[0]) {
-            processImage(result.assets[0].uri);
+            setImageUri(result.assets[0].uri);
+            setStep('describe');
         }
     };
 
@@ -94,17 +110,19 @@ export default function FoodScannerModal({
         });
 
         if (!result.canceled && result.assets[0]) {
-            processImage(result.assets[0].uri);
+            setImageUri(result.assets[0].uri);
+            setStep('describe');
         }
     };
 
-    const processImage = async (uri: string) => {
-        setImageUri(uri);
+    const processImage = async () => {
+        if (!imageUri) return;
         setStep('analyzing');
 
         try {
-            const analysisResult = await analyzeFood(uri);
+            const analysisResult = await analyzeFood(imageUri, description);
             setResult(analysisResult);
+            setEditedName(analysisResult.foodName);
             setStep('result');
         } catch (error) {
             console.error('Analysis error:', error);
@@ -116,13 +134,26 @@ export default function FoodScannerModal({
     const handleSave = async () => {
         if (!imageUri || !result) return;
 
+        // Apply portion percentage to macros
+        const portionMultiplier = portionPercent / 100;
+
         const scannedItem: ScannedItem = {
             id: generateScanId(),
             imageUri,
-            name: result.foodName,
-            sugarGrams: result.sugarGrams,
-            confidence: result.confidence,
+            name: editedName || result.foodName,
             timestamp: new Date().toISOString(),
+            portionPercent,
+            calories: Math.round(result.calories * portionMultiplier),
+            protein: Math.round(result.protein * portionMultiplier * 10) / 10,
+            carbs: Math.round(result.carbs * portionMultiplier * 10) / 10,
+            carbsSugars: Math.round(result.carbsSugars * portionMultiplier * 10) / 10,
+            fat: Math.round(result.fat * portionMultiplier * 10) / 10,
+            fatSaturated: Math.round(result.fatSaturated * portionMultiplier * 10) / 10,
+            fiber: Math.round(result.fiber * portionMultiplier * 10) / 10,
+            sugar: Math.round(result.sugar * portionMultiplier * 10) / 10,
+            sodium: Math.round(result.sodium * portionMultiplier),
+            healthScore: result.healthScore,
+            confidence: result.confidence,
             suggestion: result.suggestion,
         };
 
@@ -135,12 +166,6 @@ export default function FoodScannerModal({
         }
     };
 
-    const getSugarColor = (grams: number) => {
-        if (grams <= 5) return looviColors.accent.success;
-        if (grams <= 15) return looviColors.accent.warning;
-        return '#EF4444';
-    };
-
     const renderContent = () => {
         switch (step) {
             case 'select':
@@ -148,7 +173,7 @@ export default function FoodScannerModal({
                     <>
                         <Text style={styles.modalTitle}>Scan Food</Text>
                         <Text style={styles.modalSubtitle}>
-                            Take a photo or select from gallery
+                            Take a photo of your food or nutrition label
                         </Text>
 
                         <View style={styles.optionsContainer}>
@@ -177,6 +202,41 @@ export default function FoodScannerModal({
                     </>
                 );
 
+            case 'describe':
+                return (
+                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                        <View style={styles.describeContainer}>
+                            {imageUri && (
+                                <Image source={{ uri: imageUri }} style={styles.previewImage} />
+                            )}
+                            <Text style={styles.stepTitle}>What is this?</Text>
+                            <Text style={styles.stepSubtitle}>
+                                Add a description to improve accuracy (optional)
+                            </Text>
+
+                            <TextInput
+                                style={styles.descriptionInput}
+                                placeholder="e.g., Caesar salad with chicken..."
+                                placeholderTextColor={looviColors.text.muted}
+                                value={description}
+                                onChangeText={setDescription}
+                                multiline
+                                returnKeyType="done"
+                                blurOnSubmit={true}
+                            />
+
+                            <View style={styles.buttonRow}>
+                                <TouchableOpacity style={styles.skipButton} onPress={() => { setDescription(''); processImage(); }}>
+                                    <Text style={styles.skipText}>Skip</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.continueButton} onPress={processImage}>
+                                    <Text style={styles.continueText}>Analyze Food</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </TouchableWithoutFeedback>
+                );
+
             case 'analyzing':
                 return (
                     <>
@@ -187,34 +247,96 @@ export default function FoodScannerModal({
                             <ActivityIndicator size="large" color={looviColors.accent.primary} />
                             <Text style={styles.analyzingText}>Analyzing food...</Text>
                             <Text style={styles.analyzingHint}>
-                                Looking for sugar content
+                                Detecting nutritional content
                             </Text>
                         </View>
                     </>
                 );
 
             case 'result':
+                const healthColor = result ? getHealthScoreColor(result.healthScore) : looviColors.accent.success;
                 return (
-                    <>
+                    <ScrollView showsVerticalScrollIndicator={false} style={styles.resultScroll}>
                         {imageUri && (
                             <Image source={{ uri: imageUri }} style={styles.previewImage} />
                         )}
                         {result && (
                             <View style={styles.resultContainer}>
-                                <Text style={styles.foodName}>{result.foodName}</Text>
+                                {/* Food Name (Editable) */}
+                                {isEditing ? (
+                                    <TextInput
+                                        style={styles.nameInput}
+                                        value={editedName}
+                                        onChangeText={setEditedName}
+                                        autoFocus
+                                        onBlur={() => setIsEditing(false)}
+                                    />
+                                ) : (
+                                    <TouchableOpacity onPress={() => setIsEditing(true)}>
+                                        <Text style={styles.foodName}>{editedName || result.foodName}</Text>
+                                        <Text style={styles.tapToEdit}>Tap to edit</Text>
+                                    </TouchableOpacity>
+                                )}
 
-                                <View style={styles.sugarBadge}>
-                                    <Text style={styles.sugarLabel}>Sugar Content</Text>
-                                    <Text style={[styles.sugarValue, { color: getSugarColor(result.sugarGrams) }]}>
-                                        {result.sugarGrams}g
+                                {/* Health Score */}
+                                <View style={[styles.healthScoreBadge, { backgroundColor: `${healthColor}15` }]}>
+                                    <Text style={[styles.healthScoreValue, { color: healthColor }]}>
+                                        {result.healthScore}
                                     </Text>
+                                    <Text style={styles.healthScoreLabel}>/10 Health Score</Text>
                                 </View>
 
-                                <View style={styles.confidenceRow}>
-                                    <Text style={styles.confidenceLabel}>Confidence:</Text>
-                                    <Text style={styles.confidenceValue}>
-                                        {Math.round(result.confidence * 100)}%
-                                    </Text>
+                                {/* Portion Slider */}
+                                <View style={styles.portionSection}>
+                                    <Text style={styles.sectionLabel}>How much did you eat?</Text>
+                                    <View style={styles.portionMarkers}>
+                                        {[0, 25, 50, 75, 100].map(p => (
+                                            <Text key={p} style={[
+                                                styles.portionMarker,
+                                                portionPercent === p && styles.portionMarkerActive
+                                            ]}>{p}%</Text>
+                                        ))}
+                                    </View>
+                                    <Slider
+                                        style={styles.slider}
+                                        minimumValue={0}
+                                        maximumValue={100}
+                                        step={25}
+                                        value={portionPercent}
+                                        onValueChange={setPortionPercent}
+                                        minimumTrackTintColor={looviColors.accent.primary}
+                                        maximumTrackTintColor="rgba(0,0,0,0.1)"
+                                    />
+                                </View>
+
+                                {/* Macro Summary */}
+                                <View style={styles.macroGrid}>
+                                    <View style={styles.macroItem}>
+                                        <Text style={styles.macroValue}>{Math.round(result.calories * portionPercent / 100)}</Text>
+                                        <Text style={styles.macroLabel}>kcal</Text>
+                                    </View>
+                                    <View style={styles.macroItem}>
+                                        <Text style={styles.macroValue}>{(result.protein * portionPercent / 100).toFixed(1)}g</Text>
+                                        <Text style={styles.macroLabel}>Protein</Text>
+                                    </View>
+                                    <View style={styles.macroItem}>
+                                        <Text style={styles.macroValue}>{(result.carbs * portionPercent / 100).toFixed(1)}g</Text>
+                                        <Text style={styles.macroLabel}>Carbs</Text>
+                                    </View>
+                                    <View style={styles.macroItem}>
+                                        <Text style={styles.macroValue}>{(result.fat * portionPercent / 100).toFixed(1)}g</Text>
+                                        <Text style={styles.macroLabel}>Fat</Text>
+                                    </View>
+                                    <View style={styles.macroItem}>
+                                        <Text style={[styles.macroValue, { color: result.sugar > 15 ? '#EF4444' : looviColors.text.primary }]}>
+                                            {(result.sugar * portionPercent / 100).toFixed(1)}g
+                                        </Text>
+                                        <Text style={styles.macroLabel}>Sugar</Text>
+                                    </View>
+                                    <View style={styles.macroItem}>
+                                        <Text style={styles.macroValue}>{(result.fiber * portionPercent / 100).toFixed(1)}g</Text>
+                                        <Text style={styles.macroLabel}>Fiber</Text>
+                                    </View>
                                 </View>
 
                                 {result.suggestion && (
@@ -237,7 +359,7 @@ export default function FoodScannerModal({
                                 </View>
                             </View>
                         )}
-                    </>
+                    </ScrollView>
                 );
         }
     };
@@ -246,42 +368,68 @@ export default function FoodScannerModal({
         <Modal
             visible={visible}
             transparent
-            animationType="fade"
+            animationType="slide"
             onRequestClose={handleClose}
         >
-            <TouchableOpacity
-                style={styles.overlay}
-                activeOpacity={1}
-                onPress={handleClose}
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.keyboardAvoidingView}
             >
-                <TouchableOpacity activeOpacity={1} style={styles.modalContent}>
-                    {renderContent()}
-                </TouchableOpacity>
-            </TouchableOpacity>
+                <View style={styles.overlay}>
+                    <View style={styles.modalContent}>
+                        {/* Close Button */}
+                        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+                            <Text style={styles.closeText}>✕</Text>
+                        </TouchableOpacity>
+                        {renderContent()}
+                    </View>
+                </View>
+            </KeyboardAvoidingView>
         </Modal>
     );
 }
 
 const styles = StyleSheet.create({
+    keyboardAvoidingView: {
+        flex: 1,
+    },
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.6)',
-        justifyContent: 'center',
-        alignItems: 'center',
+        justifyContent: 'flex-end',
+    },
+    describeContainer: {
+        // Remove flex: 1 to prevent layout issues
     },
     modalContent: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 24,
+        borderTopLeftRadius: borderRadius['2xl'],
+        borderTopRightRadius: borderRadius['2xl'],
         padding: spacing.xl,
-        width: '90%',
-        maxWidth: 400,
+        paddingTop: spacing.lg,
+        minHeight: '50%',
+        maxHeight: '90%',
+    },
+    closeButton: {
+        position: 'absolute',
+        top: spacing.md,
+        right: spacing.md,
+        width: 32,
+        height: 32,
         alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10,
+    },
+    closeText: {
+        fontSize: 20,
+        color: looviColors.text.tertiary,
     },
     modalTitle: {
         fontSize: 24,
         fontWeight: '700',
         color: looviColors.text.primary,
         marginBottom: spacing.xs,
+        textAlign: 'center',
     },
     modalSubtitle: {
         fontSize: 14,
@@ -296,11 +444,11 @@ const styles = StyleSheet.create({
         marginBottom: spacing.xl,
     },
     optionButton: {
+        flex: 1,
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        borderRadius: 16,
+        borderRadius: borderRadius.xl,
         padding: spacing.xl,
         alignItems: 'center',
-        minWidth: 120,
     },
     optionEmoji: {
         fontSize: 40,
@@ -313,6 +461,7 @@ const styles = StyleSheet.create({
     },
     cancelButton: {
         paddingVertical: spacing.sm,
+        alignItems: 'center',
     },
     cancelText: {
         fontSize: 14,
@@ -321,13 +470,65 @@ const styles = StyleSheet.create({
     },
     previewImage: {
         width: '100%',
-        height: 200,
-        borderRadius: 16,
+        height: 180,
+        borderRadius: borderRadius.xl,
         marginBottom: spacing.lg,
+    },
+    stepTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        textAlign: 'center',
+        marginBottom: spacing.xs,
+    },
+    stepSubtitle: {
+        fontSize: 13,
+        fontWeight: '400',
+        color: looviColors.text.secondary,
+        textAlign: 'center',
+        marginBottom: spacing.md,
+    },
+    descriptionInput: {
+        backgroundColor: 'rgba(0, 0, 0, 0.03)',
+        borderRadius: borderRadius.lg,
+        padding: spacing.md,
+        fontSize: 15,
+        color: looviColors.text.primary,
+        minHeight: 80,
+        textAlignVertical: 'top',
+        marginBottom: spacing.lg,
+    },
+    buttonRow: {
+        flexDirection: 'row',
+        gap: spacing.md,
+    },
+    skipButton: {
+        flex: 1,
+        paddingVertical: 14,
+        borderRadius: borderRadius.xl,
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    },
+    skipText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: looviColors.text.secondary,
+    },
+    continueButton: {
+        flex: 2,
+        paddingVertical: 14,
+        borderRadius: borderRadius.xl,
+        alignItems: 'center',
+        backgroundColor: looviColors.accent.primary,
+    },
+    continueText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#FFFFFF',
     },
     analyzingContainer: {
         alignItems: 'center',
-        paddingVertical: spacing.lg,
+        paddingVertical: spacing.xl,
     },
     analyzingText: {
         fontSize: 18,
@@ -341,52 +542,108 @@ const styles = StyleSheet.create({
         color: looviColors.text.tertiary,
         marginTop: spacing.xs,
     },
+    resultScroll: {
+        maxHeight: '100%',
+    },
     resultContainer: {
-        width: '100%',
         alignItems: 'center',
     },
     foodName: {
         fontSize: 22,
         fontWeight: '700',
         color: looviColors.text.primary,
-        marginBottom: spacing.md,
         textAlign: 'center',
     },
-    sugarBadge: {
-        backgroundColor: 'rgba(0,0,0,0.05)',
-        borderRadius: 16,
-        padding: spacing.lg,
-        alignItems: 'center',
+    tapToEdit: {
+        fontSize: 11,
+        fontWeight: '400',
+        color: looviColors.text.muted,
+        textAlign: 'center',
         marginBottom: spacing.md,
-        width: '100%',
     },
-    sugarLabel: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: looviColors.text.tertiary,
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-        marginBottom: spacing.xs,
+    nameInput: {
+        fontSize: 22,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        textAlign: 'center',
+        borderBottomWidth: 2,
+        borderBottomColor: looviColors.accent.primary,
+        paddingBottom: spacing.xs,
+        marginBottom: spacing.md,
     },
-    sugarValue: {
-        fontSize: 48,
+    healthScoreBadge: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        justifyContent: 'center',
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.xl,
+        borderRadius: borderRadius.xl,
+        marginBottom: spacing.lg,
+    },
+    healthScoreValue: {
+        fontSize: 36,
         fontWeight: '800',
     },
-    confidenceRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: spacing.sm,
+    healthScoreLabel: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: looviColors.text.secondary,
+        marginLeft: spacing.xs,
     },
-    confidenceLabel: {
-        fontSize: 13,
+    portionSection: {
+        width: '100%',
+        marginBottom: spacing.lg,
+    },
+    sectionLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: looviColors.text.primary,
+        marginBottom: spacing.sm,
+        textAlign: 'center',
+    },
+    portionMarkers: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: spacing.xs,
+    },
+    portionMarker: {
+        fontSize: 11,
         fontWeight: '500',
         color: looviColors.text.tertiary,
-        marginRight: spacing.xs,
     },
-    confidenceValue: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: looviColors.text.secondary,
+    portionMarkerActive: {
+        color: looviColors.accent.primary,
+        fontWeight: '700',
+    },
+    slider: {
+        width: '100%',
+        height: 40,
+    },
+    macroGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        gap: spacing.sm,
+        marginBottom: spacing.lg,
+    },
+    macroItem: {
+        backgroundColor: 'rgba(0, 0, 0, 0.03)',
+        borderRadius: borderRadius.md,
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.md,
+        alignItems: 'center',
+        minWidth: 70,
+    },
+    macroValue: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+    },
+    macroLabel: {
+        fontSize: 10,
+        fontWeight: '500',
+        color: looviColors.text.tertiary,
+        marginTop: 2,
     },
     suggestion: {
         fontSize: 12,
@@ -404,7 +661,7 @@ const styles = StyleSheet.create({
     retryButton: {
         flex: 1,
         paddingVertical: 14,
-        borderRadius: 16,
+        borderRadius: borderRadius.xl,
         alignItems: 'center',
         backgroundColor: 'rgba(0,0,0,0.05)',
     },
@@ -416,7 +673,7 @@ const styles = StyleSheet.create({
     saveButton: {
         flex: 1,
         paddingVertical: 14,
-        borderRadius: 16,
+        borderRadius: borderRadius.xl,
         alignItems: 'center',
         backgroundColor: looviColors.accent.primary,
     },

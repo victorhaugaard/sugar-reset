@@ -7,13 +7,13 @@
  */
 
 import React, { ReactNode } from 'react';
-import { View, StyleSheet, ViewStyle, Platform } from 'react-native';
+import { View, StyleSheet, ViewStyle, Platform, StyleProp } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, borderRadius, spacing } from '../theme';
 
 interface GlassCardProps {
     children: ReactNode;
-    style?: ViewStyle;
+    style?: StyleProp<ViewStyle>;
     variant?: 'dark' | 'light';
     padding?: 'sm' | 'md' | 'lg' | 'none';
 }

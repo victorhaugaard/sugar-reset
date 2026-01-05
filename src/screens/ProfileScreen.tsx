@@ -4,7 +4,7 @@
  * User profile and settings with sky theme.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     View,
     Text,
@@ -14,6 +14,8 @@ import {
     Alert,
     Image,
     Dimensions,
+    Modal,
+    TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -22,10 +24,12 @@ import LooviBackground, { looviColors } from '../components/LooviBackground';
 import { GlassCard } from '../components/GlassCard';
 import PlanDetailsModal from '../components/PlanDetailsModal';
 import EditGoalsModal from '../components/EditGoalsModal';
-import { SwipeableTabView } from '../components/SwipeableTabView';
+
 import { useUserData } from '../context/UserDataContext';
 import { useAuthContext } from '../context/AuthContext';
 import { useAuth } from '../hooks/useAuth';
+import { AppIcon } from '../components/OnboardingIcon';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface MenuItem {
     id: string;
@@ -76,6 +80,54 @@ export default function ProfileScreen() {
     const navigation = useNavigation<any>();
     const [showPlanDetails, setShowPlanDetails] = useState(false);
     const [showEditGoals, setShowEditGoals] = useState(false);
+    const [showEditSavingsModal, setShowEditSavingsModal] = useState(false);
+    const [editSavingsGoal, setEditSavingsGoal] = useState('');
+    const [timeElapsed, setTimeElapsed] = useState(0);
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Get user data from context
+    const startDateString = onboardingData.startDate || new Date().toISOString();
+    const startDate = useMemo(() => new Date(startDateString), [startDateString]);
+    const dailySpendingCents = onboardingData.dailySpendingCents || 300;
+    const savingsGoal = onboardingData.savingsGoal || 'Something amazing';
+    const savingsGoalAmount = onboardingData.savingsGoalAmount || 500;
+
+    const GOAL_TO_REASON: Record<string, string> = {
+        cravings: 'Break free from sugar cravings',
+        habits: 'Form healthier daily habits',
+        energy: 'Better focus and mental clarity',
+        health: 'Improved overall health',
+        weight: 'Achieve your weight goals',
+        skin: 'Clearer, healthier skin',
+        focus: 'Enhanced focus and productivity',
+        blood_sugar: 'Stable blood sugar levels',
+        sleep: 'Improved sleep quality',
+        savings: 'Save money for what matters',
+    };
+
+    const userGoals = onboardingData.goals || [];
+    const reasons = userGoals.length > 0
+        ? userGoals.map(goalOrText => GOAL_TO_REASON[goalOrText] || goalOrText).filter(Boolean)
+        : ['Better focus and mental clarity', 'Stable blood sugar levels', 'Improved sleep quality'];
+
+    useEffect(() => {
+        const now = new Date();
+        const elapsed = now.getTime() - startDate.getTime();
+        setTimeElapsed(Math.max(0, elapsed));
+
+        intervalRef.current = setInterval(() => {
+            const now = new Date();
+            const elapsed = now.getTime() - startDate.getTime();
+            setTimeElapsed(Math.max(0, elapsed));
+        }, 1000);
+
+        return () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        };
+    }, [startDate]);
+
+    const moneySavedCents = Math.floor((timeElapsed / (1000 * 60 * 60 * 24)) * dailySpendingCents);
+    const moneySavedValue = (moneySavedCents / 100).toFixed(2);
 
     // Get user data from context
     const name = onboardingData.nickname || user?.displayName || 'Guest';
@@ -139,8 +191,44 @@ export default function ProfileScreen() {
         await updateOnboardingData({ goals: newGoals });
     };
 
+    const handleEditSavings = () => {
+        setEditSavingsGoal(savingsGoal);
+        setShowEditSavingsModal(true);
+    };
+
+    const handleClearAllData = () => {
+        Alert.alert(
+            'Clear All Data',
+            'This will delete all wellness logs, food logs, and reset your data for testing. Your onboarding data and streak will be preserved. Continue?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Clear Data',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await AsyncStorage.removeItem('wellness_logs');
+                            await AsyncStorage.removeItem('scanned_items');
+                            Alert.alert('Success', 'All wellness and food data has been cleared.');
+                        } catch (error) {
+                            console.error('Error clearing data:', error);
+                            Alert.alert('Error', 'Failed to clear data. Please try again.');
+                        }
+                    }
+                },
+            ]
+        );
+    };
+
+    const handleSaveSavingsGoal = async () => {
+        if (editSavingsGoal.trim()) {
+            await updateOnboardingData({ savingsGoal: editSavingsGoal.trim() });
+            setShowEditSavingsModal(false);
+        }
+    };
+
     return (
-        <SwipeableTabView currentTab="Profile">
+        <>
             <LooviBackground variant="coralLeft">
                 <SafeAreaView style={styles.container}>
                     <ScrollView
@@ -156,7 +244,7 @@ export default function ProfileScreen() {
                         {/* User Card */}
                         <GlassCard variant="light" padding="lg" style={styles.userCard}>
                             <View style={styles.avatarContainer}>
-                                <Text style={styles.avatarEmoji}>🧑</Text>
+                                <AppIcon emoji="🧑" size={40} />
                             </View>
                             <Text style={styles.userName}>{name}</Text>
                             <Text style={styles.userEmail}>{email}</Text>
@@ -167,11 +255,45 @@ export default function ProfileScreen() {
                                 </View>
                                 <View style={styles.statDivider} />
                                 <View style={styles.statItem}>
-                                    <Text style={styles.statValue}>🌟</Text>
+                                    <AppIcon emoji="🌟" size={24} />
                                     <Text style={styles.statLabel}>{plan}</Text>
                                 </View>
                             </View>
                         </GlassCard>
+
+                        {/* Reasons Section */}
+                        <View style={styles.profileSection}>
+                            <View style={styles.profileSectionHeader}>
+                                <Text style={styles.profileSectionTitle}>Why I Started</Text>
+                                <TouchableOpacity onPress={handleEditGoals}>
+                                    <Text style={styles.editIcon}>✏️</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <View style={styles.reasonsContainer}>
+                                {reasons.map((reason, index) => (
+                                    <GlassCard key={index} variant="light" padding="md" style={styles.reasonCard}>
+                                        <Text style={styles.reasonText}>{reason}</Text>
+                                    </GlassCard>
+                                ))}
+                            </View>
+                        </View>
+
+                        {/* Savings Section */}
+                        <TouchableOpacity activeOpacity={0.8} onPress={handleEditSavings} style={styles.profileSection}>
+                            <GlassCard variant="light" padding="md" style={styles.savingsCard}>
+                                <View style={styles.savingsHeader}>
+                                    <Text style={styles.savingsLabel}>Saving for</Text>
+                                    <Text style={styles.editIcon}>✏️</Text>
+                                </View>
+                                <Text style={styles.savingsGoalTitle}>{savingsGoal}</Text>
+                                <View style={styles.savingsProgress}>
+                                    <View style={styles.savingsProgressBar}>
+                                        <View style={[styles.savingsProgressFill, { width: `${Math.min((moneySavedCents / (savingsGoalAmount * 100)) * 100, 100)}%` }]} />
+                                    </View>
+                                    <Text style={styles.savingsProgressText}>${moneySavedValue} / ${savingsGoalAmount} goal</Text>
+                                </View>
+                            </GlassCard>
+                        </TouchableOpacity>
 
                         {/* Menu Sections */}
                         {menuSections.map((section, sectionIndex) => (
@@ -196,7 +318,7 @@ export default function ProfileScreen() {
                                                             : undefined
                                             }
                                         >
-                                            <Text style={styles.menuEmoji}>{item.emoji}</Text>
+                                            <AppIcon emoji={item.emoji} size={20} />
                                             <View style={styles.menuLabelContainer}>
                                                 <Text style={styles.menuLabel}>{item.label}</Text>
                                                 {item.id === 'plan' && (
@@ -209,6 +331,25 @@ export default function ProfileScreen() {
                                 </GlassCard>
                             </View>
                         ))}
+
+                        {/* Development Tools */}
+                        <View style={styles.menuSection}>
+                            <Text style={styles.sectionTitle}>Development</Text>
+                            <GlassCard variant="light" padding="none" style={styles.menuCard}>
+                                <TouchableOpacity
+                                    style={styles.menuItem}
+                                    activeOpacity={0.6}
+                                    onPress={handleClearAllData}
+                                >
+                                    <AppIcon emoji="🗑️" size={20} />
+                                    <View style={styles.menuLabelContainer}>
+                                        <Text style={[styles.menuLabel, { color: '#EF4444' }]}>Clear All Data</Text>
+                                        <Text style={styles.menuSubtext}>Reset wellness & food logs</Text>
+                                    </View>
+                                    <Text style={styles.menuArrow}>›</Text>
+                                </TouchableOpacity>
+                            </GlassCard>
+                        </View>
 
                         {/* Logout */}
                         <TouchableOpacity
@@ -238,6 +379,45 @@ export default function ProfileScreen() {
                         onClose={() => setShowEditGoals(false)}
                     />
 
+                    {/* Edit Savings Goal Modal */}
+                    <Modal
+                        visible={showEditSavingsModal}
+                        transparent
+                        animationType="fade"
+                        onRequestClose={() => setShowEditSavingsModal(false)}
+                    >
+                        <TouchableOpacity
+                            style={styles.modalOverlay}
+                            activeOpacity={1}
+                            onPress={() => setShowEditSavingsModal(false)}
+                        >
+                            <TouchableOpacity activeOpacity={1} style={styles.editModalContent}>
+                                <Text style={styles.editModalTitle}>What are you saving for?</Text>
+                                <TextInput
+                                    style={styles.editInput}
+                                    value={editSavingsGoal}
+                                    onChangeText={setEditSavingsGoal}
+                                    placeholder="e.g., A vacation, New phone..."
+                                    placeholderTextColor={looviColors.text.muted}
+                                />
+                                <View style={styles.editModalButtons}>
+                                    <TouchableOpacity
+                                        style={styles.editCancelButton}
+                                        onPress={() => setShowEditSavingsModal(false)}
+                                    >
+                                        <Text style={styles.editCancelText}>Cancel</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={styles.editSaveButton}
+                                        onPress={handleSaveSavingsGoal}
+                                    >
+                                        <Text style={styles.editSaveText}>Save</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </TouchableOpacity>
+                        </TouchableOpacity>
+                    </Modal>
+
                     {/* Plan Details Modal */}
                     <PlanDetailsModal
                         visible={showPlanDetails}
@@ -246,7 +426,7 @@ export default function ProfileScreen() {
                     />
                 </SafeAreaView>
             </LooviBackground>
-        </SwipeableTabView>
+        </>
     );
 }
 
@@ -323,6 +503,143 @@ const styles = StyleSheet.create({
         height: 30,
         backgroundColor: 'rgba(0, 0, 0, 0.1)',
     },
+    // Reasons/Savings Section Styles
+    profileSection: {
+        marginBottom: spacing.xl,
+    },
+    profileSectionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: spacing.md,
+        paddingHorizontal: spacing.sm,
+    },
+    profileSectionTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    editIcon: {
+        fontSize: 14,
+    },
+    reasonsContainer: {
+        gap: spacing.sm,
+    },
+    reasonCard: {
+        marginBottom: spacing.xs,
+    },
+    reasonText: {
+        fontSize: 15,
+        fontWeight: '500',
+        color: looviColors.text.primary,
+    },
+    savingsCard: {
+        borderWidth: 1,
+        borderColor: 'rgba(59, 130, 246, 0.1)',
+    },
+    savingsHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: spacing.xs,
+    },
+    savingsLabel: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: looviColors.text.tertiary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    savingsGoalTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        marginBottom: spacing.md,
+    },
+    savingsProgress: {
+        gap: spacing.xs,
+    },
+    savingsProgressBar: {
+        height: 8,
+        backgroundColor: 'rgba(0, 0, 0, 0.05)',
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    savingsProgressFill: {
+        height: '100%',
+        backgroundColor: looviColors.accent.success,
+        borderRadius: 4,
+    },
+    savingsProgressText: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: looviColors.text.tertiary,
+    },
+    // Modal styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: spacing.screen.horizontal,
+    },
+    editModalContent: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: borderRadius['2xl'],
+        padding: spacing.xl,
+        width: '100%',
+        maxWidth: 340,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.15,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    editModalTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        marginBottom: spacing.lg,
+        textAlign: 'center',
+    },
+    editInput: {
+        backgroundColor: 'rgba(0, 0, 0, 0.03)',
+        borderRadius: borderRadius.lg,
+        padding: spacing.md,
+        fontSize: 16,
+        color: looviColors.text.primary,
+        marginBottom: spacing.xl,
+    },
+    editModalButtons: {
+        flexDirection: 'row',
+        gap: spacing.md,
+    },
+    editCancelButton: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 25,
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    },
+    editCancelText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: looviColors.text.secondary,
+    },
+    editSaveButton: {
+        flex: 2,
+        paddingVertical: 12,
+        borderRadius: 25,
+        alignItems: 'center',
+        backgroundColor: looviColors.accent.primary,
+    },
+    editSaveText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
     menuSection: {
         marginBottom: spacing.lg,
     },
@@ -350,11 +667,26 @@ const styles = StyleSheet.create({
         fontSize: 20,
         marginRight: spacing.md,
     },
-    menuLabel: {
+    menuLabelContainer: {
         flex: 1,
+        marginLeft: spacing.md,
+    },
+    menuLabel: {
         fontSize: 15,
         fontWeight: '400',
         color: looviColors.text.primary,
+    },
+    menuValue: {
+        fontSize: 13,
+        fontWeight: '400',
+        color: looviColors.text.tertiary,
+        marginTop: 2,
+    },
+    menuSubtext: {
+        fontSize: 12,
+        fontWeight: '400',
+        color: looviColors.text.tertiary,
+        marginTop: 2,
     },
     menuArrow: {
         fontSize: 20,
@@ -383,14 +715,5 @@ const styles = StyleSheet.create({
         color: looviColors.text.muted,
         textAlign: 'center',
         marginTop: spacing.sm,
-    },
-    menuLabelContainer: {
-        flex: 1,
-    },
-    menuValue: {
-        fontSize: 12,
-        fontWeight: '400',
-        color: looviColors.text.tertiary,
-        marginTop: 2,
     },
 });

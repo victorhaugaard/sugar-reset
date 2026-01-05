@@ -132,7 +132,7 @@ export default function AlternativesScreen() {
     };
 
     return (
-        <SwipeableTabView currentTab="Alternatives">
+        <SwipeableTabView currentTab="Track">
             <LooviBackground variant="coralBottom">
                 <SafeAreaView style={styles.container}>
                     <ScrollView

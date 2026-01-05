@@ -74,6 +74,7 @@ export type RootStackParamList = {
     Reasons: undefined; // Anti-relapse reasons screen
     BreathingExercise: undefined; // Guided breathing exercise
     Journal: undefined; // Journal entries screen
+    Profile: undefined; // User profile screen
 };
 
 export type AuthStackParamList = {
@@ -120,9 +121,9 @@ export type OnboardingStackParamList = {
 export type MainTabParamList = {
     Home: undefined;
     Analytics: undefined;
-    Library: undefined;
-    Alternatives: undefined;
-    Profile: undefined;
+    Track: undefined;
+    Panic: undefined;
+    Social: undefined;
 };
 
 // App state

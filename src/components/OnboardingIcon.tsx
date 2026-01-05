@@ -64,6 +64,7 @@ const emojiToIcon: Record<string, IconMapping> = {
 
     // Food & Drinks
     '🍭': { icon: 'x-circle', color: iconColors.red },
+    '🍬': { icon: 'x-circle', color: iconColors.red },
     '🥤': { icon: 'coffee', color: iconColors.red },
     '🍩': { icon: 'circle', color: iconColors.orange },
     '🍫': { icon: 'square', color: iconColors.orange },
@@ -98,6 +99,9 @@ const emojiToIcon: Record<string, IconMapping> = {
     '🎁': { icon: 'gift', color: iconColors.coral },
 
     // Status indicators
+    '✅': { icon: 'check-circle', color: iconColors.green },
+    '✓': { icon: 'check', color: iconColors.green },
+    '✕': { icon: 'x', color: iconColors.red },
     '🟢': { icon: 'check-circle', color: iconColors.green },
     '🟡': { icon: 'alert-circle', color: iconColors.yellow },
     '🟠': { icon: 'alert-circle', color: iconColors.orange },
@@ -109,12 +113,34 @@ const emojiToIcon: Record<string, IconMapping> = {
     // People & Demographics
     '👋': { icon: 'user', color: iconColors.coral },
     '👤': { icon: 'user', color: iconColors.gray },
+    '🧑': { icon: 'user', color: iconColors.coral },
     '♂️': { icon: 'user', color: iconColors.blue },
     '♀️': { icon: 'user', color: iconColors.pink },
 
     // Medical & Awareness
     '🎗️': { icon: 'shield', color: iconColors.teal },
     '💊': { icon: 'thermometer', color: iconColors.blue },
+
+    // Nature & Environment
+    '🌳': { icon: 'feather', color: iconColors.green },
+    '🌱': { icon: 'feather', color: iconColors.green },
+    '🌟': { icon: 'star', color: iconColors.yellow },
+    '💧': { icon: 'droplet', color: iconColors.blue },
+
+    // Tools & Actions
+    '🔍': { icon: 'search', color: iconColors.blue },
+    '📝': { icon: 'edit-3', color: iconColors.gray },
+    '📓': { icon: 'book', color: iconColors.purple },
+    '🤖': { icon: 'cpu', color: iconColors.blue },
+    '🤝': { icon: 'users', color: iconColors.coral },
+    '📋': { icon: 'clipboard', color: iconColors.blue },
+
+    // Notifications & Settings
+    '🔔': { icon: 'bell', color: iconColors.yellow },
+    '💬': { icon: 'message-circle', color: iconColors.blue },
+    '⭐': { icon: 'star', color: iconColors.yellow },
+    '🔒': { icon: 'lock', color: iconColors.gray },
+    '📄': { icon: 'file-text', color: iconColors.gray },
 
     // Misc
     '🔥': { icon: 'sunrise', color: iconColors.coral },
@@ -184,4 +210,6 @@ const styles = StyleSheet.create({
     },
 });
 
+// Export as both OnboardingIcon (legacy) and AppIcon (preferred)
+export { OnboardingIcon as AppIcon };
 export default OnboardingIcon;

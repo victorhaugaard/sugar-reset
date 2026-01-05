@@ -134,7 +134,7 @@ export default function LibraryScreen() {
     };
 
     return (
-        <SwipeableTabView currentTab="Library">
+        <SwipeableTabView currentTab="Panic">
             <LooviBackground variant="mixed">
                 <SafeAreaView style={styles.container}>
                     <ScrollView
