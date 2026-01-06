@@ -26,6 +26,7 @@ import PlanDetailsModal from '../components/PlanDetailsModal';
 import EditGoalsModal from '../components/EditGoalsModal';
 
 import { useUserData } from '../context/UserDataContext';
+import { userService } from '../services/userService';
 import { useAuthContext } from '../context/AuthContext';
 import { useAuth } from '../hooks/useAuth';
 import { AppIcon } from '../components/OnboardingIcon';
@@ -80,8 +81,14 @@ export default function ProfileScreen() {
     const navigation = useNavigation<any>();
     const [showPlanDetails, setShowPlanDetails] = useState(false);
     const [showEditGoals, setShowEditGoals] = useState(false);
+    const [showEditProfile, setShowEditProfile] = useState(false);
     const [showEditSavingsModal, setShowEditSavingsModal] = useState(false);
     const [editSavingsGoal, setEditSavingsGoal] = useState('');
+    const [editNameState, setEditNameState] = useState('');
+    const [editUsername, setEditUsername] = useState('');
+    const [originalUsername, setOriginalUsername] = useState('');
+    const [usernameError, setUsernameError] = useState('');
+    const [isSavingProfile, setIsSavingProfile] = useState(false);
     const [timeElapsed, setTimeElapsed] = useState(0);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -208,7 +215,7 @@ export default function ProfileScreen() {
                     onPress: async () => {
                         try {
                             await AsyncStorage.removeItem('wellness_logs');
-                            await AsyncStorage.removeItem('scanned_items');
+                            await AsyncStorage.removeItem('@sugar_reset_scanned_items');
                             Alert.alert('Success', 'All wellness and food data has been cleared.');
                         } catch (error) {
                             console.error('Error clearing data:', error);
@@ -224,6 +231,68 @@ export default function ProfileScreen() {
         if (editSavingsGoal.trim()) {
             await updateOnboardingData({ savingsGoal: editSavingsGoal.trim() });
             setShowEditSavingsModal(false);
+        }
+    };
+
+    const handleEditProfile = async () => {
+        if (!user) return;
+        setEditNameState(name);
+
+        // Fetch current username if exists
+        try {
+            const profile = await userService.getUserProfile(user.id);
+            const currentUsername = profile?.username || '';
+            setEditUsername(currentUsername);
+            setOriginalUsername(currentUsername);
+        } catch (error) {
+            console.error('Error fetching profile:', error);
+            setEditUsername('');
+        }
+
+        setUsernameError('');
+        setShowEditProfile(true);
+    };
+
+    const handleSaveProfile = async () => {
+        if (!user) return;
+        setIsSavingProfile(true);
+        setUsernameError(''); // Clear previous error
+
+        try {
+            // Update displayName locally and in auth/onboarding
+            if (editNameState.trim() !== name) {
+                await updateOnboardingData({ nickname: editNameState.trim() });
+                // Note: user.displayName updates are handled by auth provider usually, 
+                // but we store nickname in onboardingData for this app
+            }
+
+            // Update username if changed
+            const trimmedUsername = editUsername.trim().toLowerCase();
+            if (trimmedUsername && trimmedUsername !== originalUsername) {
+                if (trimmedUsername.length < 3) {
+                    setUsernameError('Username must be at least 3 characters');
+                    setIsSavingProfile(false);
+                    return;
+                }
+
+                const isAvailable = await userService.checkUsernameAvailable(trimmedUsername);
+                if (!isAvailable) {
+                    setUsernameError('Username is already taken');
+                    setIsSavingProfile(false);
+                    return;
+                }
+
+                await userService.updateUsername(user.id, trimmedUsername);
+                setOriginalUsername(trimmedUsername);
+            }
+
+            setShowEditProfile(false);
+            Alert.alert('Success', 'Profile updated successfully');
+        } catch (error) {
+            console.error('Error saving profile:', error);
+            setUsernameError('Failed to save profile');
+        } finally {
+            setIsSavingProfile(false);
         }
     };
 
@@ -313,9 +382,11 @@ export default function ProfileScreen() {
                                                     ? handleViewPlanDetails
                                                     : item.id === 'goals'
                                                         ? handleEditGoals
-                                                        : item.id === 'journal'
-                                                            ? () => navigation.navigate('Journal')
-                                                            : undefined
+                                                        : item.id === 'profile'
+                                                            ? handleEditProfile
+                                                            : item.id === 'journal'
+                                                                ? () => navigation.navigate('Journal')
+                                                                : undefined
                                             }
                                         >
                                             <AppIcon emoji={item.emoji} size={20} />
@@ -412,6 +483,64 @@ export default function ProfileScreen() {
                                         onPress={handleSaveSavingsGoal}
                                     >
                                         <Text style={styles.editSaveText}>Save</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </TouchableOpacity>
+                        </TouchableOpacity>
+                    </Modal>
+
+                    {/* Edit Profile Modal */}
+                    <Modal
+                        visible={showEditProfile}
+                        transparent
+                        animationType="slide"
+                        onRequestClose={() => setShowEditProfile(false)}
+                    >
+                        <TouchableOpacity
+                            style={styles.modalOverlay}
+                            activeOpacity={1}
+                            onPress={() => setShowEditProfile(false)}
+                        >
+                            <TouchableOpacity activeOpacity={1} style={styles.editModalContent}>
+                                <Text style={styles.editModalTitle}>Edit Profile</Text>
+
+                                <Text style={styles.inputLabel}>Display Name</Text>
+                                <TextInput
+                                    style={styles.editInput}
+                                    value={editNameState}
+                                    onChangeText={setEditNameState}
+                                    placeholder="Your Name"
+                                    placeholderTextColor={looviColors.text.muted}
+                                />
+
+                                <Text style={styles.inputLabel}>Username (Unique)</Text>
+                                <TextInput
+                                    style={[styles.editInput, usernameError ? { borderColor: '#EF4444', borderWidth: 1 } : {}]}
+                                    value={editUsername}
+                                    onChangeText={(text) => {
+                                        setEditUsername(text);
+                                        setUsernameError('');
+                                    }}
+                                    placeholder="username"
+                                    placeholderTextColor={looviColors.text.muted}
+                                    autoCapitalize="none"
+                                />
+                                {usernameError ? <Text style={styles.errorText}>{usernameError}</Text> : null}
+
+                                <View style={styles.editModalButtons}>
+                                    <TouchableOpacity
+                                        style={styles.editCancelButton}
+                                        onPress={() => setShowEditProfile(false)}
+                                        disabled={isSavingProfile}
+                                    >
+                                        <Text style={styles.editCancelText}>Cancel</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.editSaveButton, isSavingProfile && { opacity: 0.7 }]}
+                                        onPress={handleSaveProfile}
+                                        disabled={isSavingProfile}
+                                    >
+                                        <Text style={styles.editSaveText}>{isSavingProfile ? 'Saving...' : 'Save'}</Text>
                                     </TouchableOpacity>
                                 </View>
                             </TouchableOpacity>
@@ -610,7 +739,21 @@ const styles = StyleSheet.create({
         padding: spacing.md,
         fontSize: 16,
         color: looviColors.text.primary,
-        marginBottom: spacing.xl,
+        marginBottom: spacing.md,
+    },
+    inputLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: looviColors.text.secondary,
+        marginBottom: spacing.xs,
+        marginLeft: spacing.xs,
+    },
+    errorText: {
+        fontSize: 12,
+        color: '#EF4444',
+        marginBottom: spacing.md,
+        marginTop: -spacing.sm,
+        marginLeft: spacing.xs,
     },
     editModalButtons: {
         flexDirection: 'row',

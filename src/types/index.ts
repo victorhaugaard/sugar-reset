@@ -6,12 +6,41 @@
 export interface User {
     id: string;
     email: string;
+    username?: string; // Phase 1: Unique username
     displayName?: string;
     photoURL?: string;
     createdAt: Date;
     updatedAt: Date;
     preferences: UserPreferences;
     streak: StreakData;
+}
+
+// Social & Community Types
+export interface UserStats {
+    userId: string;
+    currentStreak: number;
+    healthScore: number;
+    goalAchieved: boolean; // Daily goal met?
+    feeling: 'great' | 'good' | 'okay' | 'struggling' | null;
+    updatedAt: Date;
+}
+
+export interface Friend {
+    uid: string;
+    displayName: string;
+    username: string;
+    photoURL?: string;
+    addedAt: Date;
+}
+
+export interface FriendRequest {
+    id: string;
+    fromUid: string;
+    fromName: string;
+    fromUsername?: string;
+    toUid: string;
+    status: 'pending' | 'accepted' | 'declined';
+    createdAt: Date;
 }
 
 export interface UserPreferences {

@@ -19,6 +19,7 @@ import {
     KeyboardAvoidingView,
     Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { GlassCard } from './GlassCard';
 import { spacing, borderRadius } from '../theme';
 import { skyColors } from './SkyBackground';
@@ -40,11 +41,11 @@ export interface JournalEntryData {
 }
 
 const MOOD_OPTIONS = [
-    { value: 'great', emoji: '😊', label: 'Great' },
-    { value: 'good', emoji: '🙂', label: 'Good' },
-    { value: 'okay', emoji: '😐', label: 'Okay' },
-    { value: 'struggling', emoji: '😔', label: 'Struggling' },
-    { value: 'difficult', emoji: '😢', label: 'Difficult' },
+    { value: 'great', icon: 'happy' as const, label: 'Great', color: '#22C55E' },
+    { value: 'good', icon: 'happy-outline' as const, label: 'Good', color: '#84CC16' },
+    { value: 'okay', icon: 'remove-circle-outline' as const, label: 'Okay', color: '#F59E0B' },
+    { value: 'struggling', icon: 'sad-outline' as const, label: 'Struggling', color: '#F97316' },
+    { value: 'difficult', icon: 'sad' as const, label: 'Difficult', color: '#EF4444' },
 ] as const;
 
 export function JournalEntryModal({
@@ -127,14 +128,21 @@ export function JournalEntryModal({
                                                     key={option.value}
                                                     style={[
                                                         styles.moodButton,
-                                                        mood === option.value && styles.moodButtonActive,
+                                                        mood === option.value && [
+                                                            styles.moodButtonActive,
+                                                            { borderColor: option.color, backgroundColor: `${option.color}15` }
+                                                        ],
                                                     ]}
                                                     onPress={() => setMood(option.value)}
                                                 >
-                                                    <Text style={styles.moodEmoji}>{option.emoji}</Text>
+                                                    <Ionicons
+                                                        name={option.icon}
+                                                        size={22}
+                                                        color={mood === option.value ? option.color : 'rgba(0,0,0,0.4)'}
+                                                    />
                                                     <Text style={[
                                                         styles.moodLabel,
-                                                        mood === option.value && styles.moodLabelActive,
+                                                        mood === option.value && { color: option.color, fontWeight: '600' },
                                                     ]}>
                                                         {option.label}
                                                     </Text>
@@ -260,34 +268,27 @@ const styles = StyleSheet.create({
     },
     moodButtons: {
         flexDirection: 'row',
-        gap: spacing.sm,
-        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        gap: 4,
     },
     moodButton: {
         flex: 1,
-        minWidth: 60,
-        padding: spacing.sm,
+        paddingVertical: spacing.sm,
+        paddingHorizontal: 4,
         backgroundColor: 'rgba(0, 0, 0, 0.05)',
-        borderRadius: borderRadius.lg,
+        borderRadius: borderRadius.md,
         alignItems: 'center',
         borderWidth: 2,
         borderColor: 'transparent',
     },
     moodButtonActive: {
-        borderColor: '#3B82F6',
-        backgroundColor: 'rgba(59, 130, 246, 0.15)',
-    },
-    moodEmoji: {
-        fontSize: 24,
-        marginBottom: 2,
+        borderWidth: 2,
     },
     moodLabel: {
-        fontSize: 10,
+        fontSize: 9,
         fontWeight: '500',
         color: 'rgba(0,0,0,0.5)',
-    },
-    moodLabelActive: {
-        color: '#3B82F6',
+        marginTop: 2,
     },
     triggerInput: {
         backgroundColor: 'rgba(0, 0, 0, 0.05)',

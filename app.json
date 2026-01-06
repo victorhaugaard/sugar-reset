@@ -14,7 +14,12 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.sugarreset.app"
+      "bundleIdentifier": "com.sugarreset.app",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "SugarReset needs access to your health data to sync your daily nutrition and sugar intake.",
+        "NSHealthUpdateUsageDescription": "SugarReset needs access to update your health data with your logged nutrition.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -23,15 +28,20 @@
       },
       "package": "com.sugarreset.app",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.health.READ_NUTRITION",
+        "android.permission.health.WRITE_NUTRITION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "extra": {
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
+        "projectId": "830fe8e5-e8bb-4d50-8695-7e2a736e75dd"
       }
-    }
+    },
+    "owner": "victorhaugaard"
   }
 }

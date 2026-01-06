@@ -18,7 +18,9 @@ import {
     ScrollView,
     Modal,
     TextInput,
+    Alert,
 } from 'react-native';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { spacing, borderRadius } from '../theme';
@@ -33,6 +35,7 @@ import { SwipeableTabView } from '../components/SwipeableTabView';
 import JournalEntryModal from '../components/JournalEntryModal';
 import FoodScannerModal from '../components/FoodScannerModal';
 import { getTodayGuidance, PlanType, getPlanDetails, getCurrentWeek } from '../utils/planUtils';
+import { healthService } from '../services/healthService';
 import { PlanProgressBar } from '../components/PlanProgressBar';
 import { WellnessTracker, WellnessData } from '../components/WellnessTracker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -73,6 +76,7 @@ export default function HomeScreen() {
     const [showTrackModal, setShowTrackModal] = useState(false);
     const [showFoodScannerModal, setShowFoodScannerModal] = useState(false);
     const [showWellnessModal, setShowWellnessModal] = useState(false);
+    const [hasWellnessToday, setHasWellnessToday] = useState(false);
     const [wellnessMood, setWellnessMood] = useState(3);
     const [wellnessEnergy, setWellnessEnergy] = useState(3);
     const [wellnessFocus, setWellnessFocus] = useState(3);
@@ -92,6 +96,7 @@ export default function HomeScreen() {
         getLatestJournalEntry,
         updateOnboardingData,
         addJournalEntry,
+        updateHealthScore,
     } = useUserData();
 
     // Get user data from context (with fallbacks)
@@ -156,37 +161,47 @@ export default function HomeScreen() {
 
                 setScannedItems(foodItems);
 
-                if (stored) {
-                    const logs = JSON.parse(stored);
+                const logs = stored ? JSON.parse(stored) : [];
 
-                    // Filter last 7 days by actual date
-                    const cutoffDate = new Date();
-                    cutoffDate.setDate(cutoffDate.getDate() - 7);
+                // Check if today has wellness logged
+                const todayStr = new Date().toISOString().split('T')[0];
+                const hasTodayWellness = logs.some((log: any) => log.date === todayStr);
+                setHasWellnessToday(hasTodayWellness);
 
-                    const recentLogs = logs.filter((log: any) =>
-                        new Date(log.date) >= cutoffDate
-                    );
+                // Filter logs for last 7 days
+                const sevenDaysAgo = new Date();
+                sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+                const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
 
-                    if (recentLogs.length > 0) {
-                        const avgMood = recentLogs.reduce((sum: number, l: any) => sum + l.mood, 0) / recentLogs.length;
-                        const avgEnergy = recentLogs.reduce((sum: number, l: any) => sum + l.energy, 0) / recentLogs.length;
-                        const avgFocus = recentLogs.reduce((sum: number, l: any) => sum + l.focus, 0) / recentLogs.length;
-                        const avgSleep = recentLogs.reduce((sum: number, l: any) => sum + l.sleepHours, 0) / recentLogs.length;
-                        setWellnessAverages({
-                            mood: avgMood,
-                            energy: avgEnergy,
-                            focus: avgFocus,
-                            sleep: avgSleep,
-                        });
-                    } else {
-                        setWellnessAverages(null);
-                    }
+                const recentLogs = logs.filter((log: any) => log.date >= sevenDaysAgoStr);
+
+                if (recentLogs.length > 0) {
+                    // Calculate actual averages for each metric
+                    const sum = recentLogs.reduce((acc: any, log: any) => ({
+                        mood: acc.mood + log.mood,
+                        energy: acc.energy + log.energy,
+                        focus: acc.focus + log.focus,
+                        sleep: acc.sleep + log.sleepHours,
+                    }), { mood: 0, energy: 0, focus: 0, sleep: 0 });
+
+                    setWellnessAverages({
+                        mood: sum.mood / recentLogs.length,
+                        energy: sum.energy / recentLogs.length,
+                        focus: sum.focus / recentLogs.length,
+                        sleep: sum.sleep / recentLogs.length,
+                    });
+
+                    // Aggregate data for health score calculation
+                    const aggregated = aggregateHealthData(foodItems, logs, 7);
+                    updateHealthScore(aggregated.avgOverallScore);
                 } else {
                     setWellnessAverages(null);
+                    updateHealthScore(0);
                 }
             } catch (error) {
                 console.error('Error loading wellness averages:', error);
                 setWellnessAverages(null);
+                setHasWellnessToday(false);
             }
         };
         loadWellnessAverages();
@@ -244,6 +259,23 @@ export default function HomeScreen() {
             setShowWellnessModal(false);
         } catch (error) {
             console.error('Failed to save wellness log:', error);
+        }
+    };
+
+    const handleSleepSync = async () => {
+        try {
+            const sleepHours = await healthService.getTodaySleep();
+            if (sleepHours > 0) {
+                // Round to nearest 0.5
+                const rounded = Math.round(sleepHours * 2) / 2;
+                setWellnessSleep(rounded);
+                Alert.alert('Synced', `Updated sleep to ${rounded} hours based on Health data.`);
+            } else {
+                Alert.alert('No Data', 'No sleep data found for today.');
+            }
+        } catch (error) {
+            console.error(error);
+            Alert.alert('Error', 'Failed to sync sleep data.');
         }
     };
 
@@ -433,43 +465,124 @@ export default function HomeScreen() {
                             <TouchableOpacity
                                 activeOpacity={0.8}
                                 onPress={() => setShowPledgeModal(true)}
-                                style={styles.tripleActionButton}
+                                style={styles.circleButtonContainer}
                             >
-                                <GlassCard variant="light" padding="sm" style={[styles.tripleActionCard, { backgroundColor: hasPledgedToday ? 'rgba(34, 197, 94, 0.15)' : 'rgba(217, 123, 102, 0.15)' }]}>
-                                    <AppIcon emoji={hasPledgedToday ? "✅" : "🤝"} size={24} />
-                                    <Text style={[styles.tripleActionLabel, hasPledgedToday && { color: '#22C55E' }]}>
-                                        {hasPledgedToday ? 'Pledged' : 'Pledge'}
-                                    </Text>
-                                </GlassCard>
+                                <View style={[
+                                    styles.circleButton,
+                                    {
+                                        backgroundColor: hasPledgedToday ? 'rgba(34, 197, 94, 0.85)' : 'rgba(217, 123, 102, 0.85)',
+                                        shadowColor: hasPledgedToday ? '#22C55E' : looviColors.coralOrange,
+                                    }
+                                ]}>
+                                    <AppIcon emoji={hasPledgedToday ? "✅" : "🤝"} size={26} color="#FFFFFF" />
+                                </View>
+                                <Text style={[styles.circleButtonLabel, hasPledgedToday && { color: '#22C55E' }]}>
+                                    {hasPledgedToday ? 'Pledged' : 'Pledge'}
+                                </Text>
                             </TouchableOpacity>
 
                             {/* Track Button - Quick Log access */}
                             <TouchableOpacity
                                 activeOpacity={0.8}
                                 onPress={() => setShowTrackModal(true)}
-                                style={styles.tripleActionButton}
+                                style={styles.circleButtonContainer}
                             >
-                                <GlassCard variant="light" padding="sm" style={[styles.tripleActionCard, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-                                    <AppIcon emoji="📊" size={24} />
-                                    <Text style={styles.tripleActionLabel}>Track</Text>
-                                </GlassCard>
+                                <View style={[
+                                    styles.circleButton,
+                                    {
+                                        backgroundColor: 'rgba(245, 158, 11, 0.85)',
+                                        shadowColor: '#F59E0B',
+                                    }
+                                ]}>
+                                    <AppIcon emoji="📊" size={26} color="#FFFFFF" />
+                                </View>
+                                <Text style={styles.circleButtonLabel}>Track</Text>
                             </TouchableOpacity>
 
                             {/* Journal Button */}
                             <TouchableOpacity
                                 activeOpacity={0.8}
                                 onPress={() => setShowJournalModal(true)}
-                                style={styles.tripleActionButton}
+                                style={styles.circleButtonContainer}
                             >
-                                <GlassCard variant="light" padding="sm" style={[styles.tripleActionCard, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
-                                    <AppIcon emoji="📓" size={24} />
-                                    <Text style={styles.tripleActionLabel}>Journal</Text>
-                                </GlassCard>
+                                <View style={[
+                                    styles.circleButton,
+                                    {
+                                        backgroundColor: 'rgba(139, 92, 246, 0.85)',
+                                        shadowColor: '#8B5CF6',
+                                    }
+                                ]}>
+                                    <AppIcon emoji="📓" size={26} color="#FFFFFF" />
+                                </View>
+                                <Text style={styles.circleButtonLabel}>Journal</Text>
                             </TouchableOpacity>
                         </View>
 
+                        {/* Smart Call-to-Action */}
+                        <TouchableOpacity
+                            style={styles.ctaContainer}
+                            activeOpacity={0.85}
+                            onPress={() => {
+                                // Navigate based on what's pending
+                                if (!hasPledgedToday) {
+                                    setShowPledgeModal(true);
+                                } else if (!wellnessAverages) {
+                                    setShowWellnessModal(true);
+                                } else if (!hasFoodLoggedToday) {
+                                    setShowFoodScannerModal(true);
+                                } else {
+                                    setShowJournalModal(true);
+                                }
+                            }}
+                        >
+                            <View style={styles.ctaContent}>
+                                <View style={styles.ctaIconContainer}>
+                                    <Feather
+                                        name={
+                                            !hasPledgedToday ? 'target' :
+                                                !wellnessAverages ? 'heart' :
+                                                    !hasFoodLoggedToday ? 'camera' : 'edit-3'
+                                        }
+                                        size={20}
+                                        color={looviColors.accent.primary}
+                                    />
+                                </View>
+                                <View style={styles.ctaTextContainer}>
+                                    <Text style={styles.ctaTitle}>
+                                        {!hasPledgedToday ? 'Make Your Daily Pledge' :
+                                            !wellnessAverages ? 'Log Your Wellness' :
+                                                !hasFoodLoggedToday ? 'Log Your First Meal' : 'Reflect on Your Day'}
+                                    </Text>
+                                    <Text style={styles.ctaSubtitle}>
+                                        {!hasPledgedToday ? 'Start your day with intention' :
+                                            !wellnessAverages ? 'Track mood, energy, focus & sleep' :
+                                                !hasFoodLoggedToday ? 'Scan or add what you ate' : 'Write about your progress'}
+                                    </Text>
+                                </View>
+                                <Feather name="chevron-right" size={20} color={looviColors.text.muted} />
+                            </View>
+                        </TouchableOpacity>
+
                         {/* 7-Day Wellness Averages */}
-                        {wellnessAverages && <WellnessTracker averages={wellnessAverages} />}
+                        {wellnessAverages ? (
+                            <WellnessTracker averages={wellnessAverages} />
+                        ) : (
+                            <GlassCard variant="light" padding="lg" style={styles.wellnessEmptyCard}>
+                                <View style={styles.wellnessEmptyHeader}>
+                                    <Feather name="heart" size={18} color={looviColors.accent.primary} />
+                                    <Text style={styles.wellnessEmptyTitle}>7-Day Wellness</Text>
+                                </View>
+                                <Text style={styles.wellnessEmptyText}>
+                                    Start logging your mood, energy, focus, and sleep to see your 7-day averages here.
+                                </Text>
+                                <TouchableOpacity
+                                    style={styles.wellnessEmptyButton}
+                                    onPress={() => setShowWellnessModal(true)}
+                                >
+                                    <Text style={styles.wellnessEmptyButtonText}>Log Wellness</Text>
+                                </TouchableOpacity>
+                            </GlassCard>
+                        )}
 
 
                     </ScrollView>
@@ -741,7 +854,14 @@ export default function HomeScreen() {
                                         setShowFoodScannerModal(true);
                                     }}
                                 >
-                                    <AppIcon emoji="🍎" size={32} />
+                                    <View style={styles.trackOptionIconContainer}>
+                                        <AppIcon emoji="🍎" size={32} />
+                                        {scannedItems.length > 0 && (
+                                            <View style={styles.trackOptionBadge}>
+                                                <Text style={styles.trackOptionBadgeText}>{scannedItems.length}</Text>
+                                            </View>
+                                        )}
+                                    </View>
                                     <View style={styles.trackOptionText}>
                                         <Text style={styles.trackOptionTitle}>What have you eaten?</Text>
                                         <Text style={styles.trackOptionSubtitle}>Scan or log your food</Text>
@@ -755,10 +875,19 @@ export default function HomeScreen() {
                                         setShowWellnessModal(true);
                                     }}
                                 >
-                                    <AppIcon emoji="💭" size={32} />
+                                    <View style={styles.trackOptionIconContainer}>
+                                        <AppIcon emoji="💭" size={32} />
+                                        {hasWellnessToday && (
+                                            <View style={styles.trackOptionBadge}>
+                                                <Ionicons name="checkmark" size={10} color="#FFFFFF" />
+                                            </View>
+                                        )}
+                                    </View>
                                     <View style={styles.trackOptionText}>
                                         <Text style={styles.trackOptionTitle}>How are you feeling?</Text>
-                                        <Text style={styles.trackOptionSubtitle}>Log your wellness</Text>
+                                        <Text style={styles.trackOptionSubtitle}>
+                                            {hasWellnessToday ? "Edit today's wellness" : "Log your wellness"}
+                                        </Text>
                                     </View>
                                 </TouchableOpacity>
                             </TouchableOpacity>
@@ -880,11 +1009,29 @@ export default function HomeScreen() {
                                     {/* Sleep */}
                                     <View style={styles.wellnessScaleContainer}>
                                         <View style={styles.wellnessScaleHeader}>
-                                            <AppIcon emoji="😴" size={20} />
-                                            <Text style={styles.wellnessScaleLabel}>Hours of Sleep</Text>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                <AppIcon emoji="😴" size={20} />
+                                                <Text style={styles.wellnessScaleLabel}>Hours of Sleep</Text>
+                                            </View>
+                                            <TouchableOpacity
+                                                onPress={handleSleepSync}
+                                                style={{
+                                                    marginLeft: 'auto',
+                                                    paddingHorizontal: 8,
+                                                    paddingVertical: 4,
+                                                    backgroundColor: 'rgba(0,0,0,0.05)',
+                                                    borderRadius: 12,
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    gap: 4
+                                                }}
+                                            >
+                                                <Feather name="refresh-cw" size={12} color={looviColors.accent.primary} />
+                                                <Text style={{ fontSize: 10, color: looviColors.accent.primary, fontWeight: '600' }}>Sync Health</Text>
+                                            </TouchableOpacity>
                                         </View>
                                         <View style={styles.wellnessSleepButtons}>
-                                            {[5, 6, 7, 8, 9, 10].map(h => (
+                                            {[4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10, 10.5, 11].map(h => (
                                                 <TouchableOpacity
                                                     key={h}
                                                     style={[
@@ -896,7 +1043,7 @@ export default function HomeScreen() {
                                                     <Text style={[
                                                         styles.wellnessSleepButtonText,
                                                         wellnessSleep === h && styles.wellnessSleepButtonTextActive
-                                                    ]}>{h}h</Text>
+                                                    ]}>{h % 1 === 0 ? `${h}h` : `${h}`}</Text>
                                                 </TouchableOpacity>
                                             ))}
                                         </View>
@@ -1648,7 +1795,41 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#FFFFFF',
     },
-    // Triple Action Buttons (Pledge, Logging, Journal)
+    // Action Button Row (Pledge, Track, Journal)
+    actionRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        marginVertical: spacing.md,
+    },
+    // Circular Action Buttons (Pledge, Track, Journal) - SOS-like styling
+    circleButtonContainer: {
+        alignItems: 'center',
+        marginHorizontal: spacing.md, // Closer together
+    },
+    circleButton: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: spacing.xs,
+        // White ring/border like SOS button
+        borderWidth: 3,
+        borderColor: 'rgba(255, 255, 255, 0.8)',
+        // Floating glow effect
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 10,
+        elevation: 8,
+    },
+    circleButtonLabel: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: looviColors.text.primary,
+        textAlign: 'center',
+    },
+    // Keep legacy styles for compatibility
     tripleActionButton: {
         flex: 1,
     },
@@ -1794,6 +1975,28 @@ const styles = StyleSheet.create({
         color: looviColors.text.tertiary,
         marginTop: 2,
     },
+    trackOptionIconContainer: {
+        position: 'relative',
+    },
+    trackOptionBadge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        minWidth: 16,
+        height: 16,
+        paddingHorizontal: 4,
+        borderRadius: 8,
+        backgroundColor: looviColors.accent.success,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: '#FFFFFF',
+    },
+    trackOptionBadgeText: {
+        fontSize: 9,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
     // Wellness Modal Styles
     wellnessModalContent: {
         backgroundColor: '#FFFFFF',
@@ -1901,6 +2104,79 @@ const styles = StyleSheet.create({
     },
     wellnessSaveButtonText: {
         fontSize: 16,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
+    // CTA Component Styles
+    ctaContainer: {
+        marginVertical: spacing.md,
+        borderRadius: borderRadius.xl,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderWidth: 1,
+        borderColor: looviColors.accent.primary,
+        borderStyle: 'dashed',
+        overflow: 'hidden',
+    },
+    ctaContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.lg,
+    },
+    ctaIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: `${looviColors.accent.primary}15`,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: spacing.md,
+    },
+    ctaTextContainer: {
+        flex: 1,
+    },
+    ctaTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        marginBottom: 2,
+    },
+    ctaSubtitle: {
+        fontSize: 12,
+        fontWeight: '400',
+        color: looviColors.text.tertiary,
+    },
+    // Wellness Empty State Styles
+    wellnessEmptyCard: {
+        marginVertical: spacing.md,
+        alignItems: 'center',
+    },
+    wellnessEmptyHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        marginBottom: spacing.sm,
+    },
+    wellnessEmptyTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+    },
+    wellnessEmptyText: {
+        fontSize: 13,
+        fontWeight: '400',
+        color: looviColors.text.tertiary,
+        textAlign: 'center',
+        marginBottom: spacing.md,
+    },
+    wellnessEmptyButton: {
+        backgroundColor: looviColors.accent.primary,
+        paddingVertical: 10,
+        paddingHorizontal: spacing.xl,
+        borderRadius: borderRadius.lg,
+    },
+    wellnessEmptyButtonText: {
+        fontSize: 14,
         fontWeight: '600',
         color: '#FFFFFF',
     },

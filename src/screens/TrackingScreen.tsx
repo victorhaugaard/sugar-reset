@@ -16,11 +16,12 @@ import {
     TouchableOpacity,
     ScrollView,
     Alert,
+    Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import { spacing, borderRadius } from '../theme';
 import LooviBackground, { looviColors } from '../components/LooviBackground';
 import { GlassCard } from '../components/GlassCard';
@@ -34,10 +35,13 @@ import {
     getScannedItems,
     getFoodCountsByDate,
     getScannedItemsForDate,
-    ScannedItem
+    saveScannedItem,
+    generateScanId,
+    ScannedItem,
 } from '../services/scannerService';
 import { useUserData, JournalEntry } from '../context/UserDataContext';
 import { SwipeableTabView } from '../components/SwipeableTabView';
+import { healthService } from '../services/healthService';
 
 const WELLNESS_LOGS_KEY = 'wellness_logs';
 
@@ -53,20 +57,43 @@ interface WellnessLog {
 function WellnessModal({
     visible,
     onClose,
-    onSave
+    onSave,
+    selectedDate,
+    existingData
 }: {
     visible: boolean;
     onClose: () => void;
     onSave: (log: WellnessLog) => void;
+    selectedDate: string;
+    existingData?: WellnessLog | null;
 }) {
     const [mood, setMood] = useState(3);
     const [energy, setEnergy] = useState(3);
     const [focus, setFocus] = useState(3);
     const [sleepHours, setSleepHours] = useState(7);
 
+    // Reset or prefill values when modal opens
+    useEffect(() => {
+        if (visible) {
+            if (existingData) {
+                // Editing existing data - prefill with existing values
+                setMood(existingData.mood);
+                setEnergy(existingData.energy);
+                setFocus(existingData.focus);
+                setSleepHours(existingData.sleepHours);
+            } else {
+                // Adding new data - reset to defaults
+                setMood(3);
+                setEnergy(3);
+                setFocus(3);
+                setSleepHours(7);
+            }
+        }
+    }, [visible, existingData]);
+
     const handleSave = () => {
         onSave({
-            date: new Date().toISOString().split('T')[0],
+            date: selectedDate,
             mood,
             energy,
             focus,
@@ -74,6 +101,20 @@ function WellnessModal({
         });
         onClose();
     };
+
+    const isToday = selectedDate === new Date().toISOString().split('T')[0];
+    const isFutureDate = selectedDate > new Date().toISOString().split('T')[0];
+    const dateFormatted = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+    });
+
+    // Generate sleep hour options (4 to 11 in 0.5 increments)
+    const sleepOptions: number[] = [];
+    for (let h = 4; h <= 11; h += 0.5) {
+        sleepOptions.push(h);
+    }
 
     const ScaleSelector = ({
         label,
@@ -121,7 +162,13 @@ function WellnessModal({
                 </TouchableOpacity>
 
                 <Text style={wellnessStyles.title}>How are you feeling?</Text>
-                <Text style={wellnessStyles.subtitle}>Rate your wellness today</Text>
+                <Text style={wellnessStyles.subtitle}>
+                    {isFutureDate
+                        ? "⚠️ Can't log for future dates"
+                        : isToday
+                            ? 'Rate your wellness today'
+                            : `Logging for ${dateFormatted}`}
+                </Text>
 
                 <ScrollView showsVerticalScrollIndicator={false}>
                     <ScaleSelector label="Mood" value={mood} onChange={setMood} iconName="happy-outline" />
@@ -129,10 +176,34 @@ function WellnessModal({
                     <ScaleSelector label="Focus" value={focus} onChange={setFocus} iconName="bulb-outline" />
 
                     <View style={wellnessStyles.sleepSection}>
-                        <Ionicons name="bed-outline" size={20} color={looviColors.accent.primary} style={wellnessStyles.scaleIcon} />
-                        <Text style={wellnessStyles.scaleLabel}>Hours of Sleep</Text>
+                        <View style={wellnessStyles.sleepHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Ionicons name="bed-outline" size={20} color={looviColors.accent.primary} style={wellnessStyles.scaleIcon} />
+                                <Text style={wellnessStyles.scaleLabel}>Hours of Sleep</Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={async () => {
+                                    try {
+                                        const sleepHrs = await healthService.getTodaySleep();
+                                        if (sleepHrs > 0) {
+                                            const rounded = Math.round(sleepHrs * 2) / 2;
+                                            setSleepHours(rounded);
+                                            Alert.alert('Synced', `Updated sleep to ${rounded} hours from Health data.`);
+                                        } else {
+                                            Alert.alert('No Data', 'No sleep data found in Health app.');
+                                        }
+                                    } catch (e) {
+                                        Alert.alert('Error', 'Failed to sync from Health.');
+                                    }
+                                }}
+                                style={wellnessStyles.syncButton}
+                            >
+                                <Feather name="refresh-cw" size={12} color={looviColors.accent.primary} />
+                                <Text style={wellnessStyles.syncButtonText}>Sync Health</Text>
+                            </TouchableOpacity>
+                        </View>
                         <View style={wellnessStyles.sleepButtons}>
-                            {[5, 6, 7, 8, 9, 10].map(h => (
+                            {sleepOptions.map(h => (
                                 <TouchableOpacity
                                     key={h}
                                     style={[
@@ -144,15 +215,21 @@ function WellnessModal({
                                     <Text style={[
                                         wellnessStyles.sleepButtonText,
                                         sleepHours === h && wellnessStyles.sleepButtonTextActive
-                                    ]}>{h}h</Text>
+                                    ]}>{h % 1 === 0 ? `${h}h` : `${h}`}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
                     </View>
                 </ScrollView>
 
-                <TouchableOpacity style={wellnessStyles.saveButton} onPress={handleSave}>
-                    <Text style={wellnessStyles.saveButtonText}>Save How I'm Feeling</Text>
+                <TouchableOpacity
+                    style={[wellnessStyles.saveButton, isFutureDate && wellnessStyles.saveButtonDisabled]}
+                    onPress={handleSave}
+                    disabled={isFutureDate}
+                >
+                    <Text style={wellnessStyles.saveButtonText}>
+                        {isFutureDate ? "Can't Save Future Data" : 'Save How I\'m Feeling'}
+                    </Text>
                 </TouchableOpacity>
             </View>
         </View>
@@ -173,6 +250,13 @@ export default function TrackingScreen() {
     const [foodCounts, setFoodCounts] = useState<Record<string, number>>({});
     const [selectedDayFoods, setSelectedDayFoods] = useState<ScannedItem[]>([]);
     const [selectedDayWellness, setSelectedDayWellness] = useState<any | null>(null);
+    const [wellnessDates, setWellnessDates] = useState<string[]>([]);
+    const [todayFoods, setTodayFoods] = useState<ScannedItem[]>([]);
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Calculate today's sugar total
+    const todaySugarTotal = todayFoods.reduce((sum, food) => sum + (food.addedSugar || food.sugar || 0), 0);
 
     // Load food counts for calendar
     const loadFoodCounts = useCallback(async () => {
@@ -186,7 +270,13 @@ export default function TrackingScreen() {
         setSelectedDayFoods(foods);
     }, [selectedDate]);
 
-    // Load wellness for selected date
+    // Load today's foods for badge indicator
+    const loadTodayFoods = useCallback(async () => {
+        const foods = await getScannedItemsForDate(todayStr);
+        setTodayFoods(foods);
+    }, [todayStr]);
+
+    // Load wellness for selected date and track all wellness dates
     const loadSelectedDayWellness = useCallback(async () => {
         try {
             const stored = await AsyncStorage.getItem('wellness_logs');
@@ -194,8 +284,12 @@ export default function TrackingScreen() {
                 const logs = JSON.parse(stored);
                 const dayLog = logs.find((log: any) => log.date === selectedDate);
                 setSelectedDayWellness(dayLog || null);
+                // Extract all dates with wellness data
+                const dates = logs.map((log: any) => log.date);
+                setWellnessDates(dates);
             } else {
                 setSelectedDayWellness(null);
+                setWellnessDates([]);
             }
         } catch (error) {
             console.error('Error loading wellness:', error);
@@ -207,7 +301,8 @@ export default function TrackingScreen() {
         loadFoodCounts();
         loadSelectedDayFoods();
         loadSelectedDayWellness();
-    }, [loadFoodCounts, loadSelectedDayFoods, loadSelectedDayWellness]));
+        loadTodayFoods();
+    }, [loadFoodCounts, loadSelectedDayFoods, loadSelectedDayWellness, loadTodayFoods]));
 
     useEffect(() => {
         loadSelectedDayFoods();
@@ -288,15 +383,26 @@ export default function TrackingScreen() {
                             <Text style={styles.subtitle}>Log your food & feelings</Text>
                         </View>
 
-                        {/* Two Big Action Buttons */}
+                        {/* Two Big Action Buttons - ALWAYS reference TODAY */}
                         <View style={styles.actionButtons}>
                             <TouchableOpacity
                                 style={styles.actionButton}
-                                onPress={() => setShowScannerModal(true)}
+                                onPress={() => {
+                                    // Set date to today then open scanner
+                                    handleDateSelect(todayStr);
+                                    setShowScannerModal(true);
+                                }}
                                 activeOpacity={0.8}
                             >
                                 <GlassCard variant="light" padding="lg" style={styles.actionCard}>
-                                    <Ionicons name="nutrition" size={40} color={looviColors.accent.primary} />
+                                    <View style={styles.actionIconContainer}>
+                                        <Ionicons name="nutrition" size={40} color={looviColors.accent.primary} />
+                                        {todayFoods.length > 0 && (
+                                            <View style={[styles.loggedBadge, { backgroundColor: todaySugarTotal > 50 ? '#EF4444' : '#22C55E' }]}>
+                                                <Text style={styles.sugarBadgeText}>{Math.round(todaySugarTotal)}g</Text>
+                                            </View>
+                                        )}
+                                    </View>
                                     <Text style={styles.actionTitle}>What have you eaten?</Text>
                                     <Text style={styles.actionSubtitle}>Scan or log your food</Text>
                                 </GlassCard>
@@ -304,21 +410,35 @@ export default function TrackingScreen() {
 
                             <TouchableOpacity
                                 style={styles.actionButton}
-                                onPress={() => setShowWellnessModal(true)}
+                                onPress={() => {
+                                    // Select today, then open wellness modal for today
+                                    handleDateSelect(todayStr);
+                                    setShowWellnessModal(true);
+                                }}
                                 activeOpacity={0.8}
                             >
                                 <GlassCard variant="light" padding="lg" style={styles.actionCard}>
-                                    <Ionicons name="fitness" size={40} color={looviColors.accent.primary} />
+                                    <View style={styles.actionIconContainer}>
+                                        <Ionicons name="fitness" size={40} color={looviColors.accent.primary} />
+                                        {wellnessDates.includes(todayStr) && (
+                                            <View style={styles.loggedBadge}>
+                                                <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+                                            </View>
+                                        )}
+                                    </View>
                                     <Text style={styles.actionTitle}>How are you feeling?</Text>
-                                    <Text style={styles.actionSubtitle}>Log your wellness</Text>
+                                    <Text style={styles.actionSubtitle}>
+                                        {wellnessDates.includes(todayStr) ? "Edit today's wellness" : "Log today's wellness"}
+                                    </Text>
                                 </GlassCard>
                             </TouchableOpacity>
                         </View>
 
-                        {/* Food Calendar */}
+                        {/* Food Calendar with Wellness Indicators */}
                         <GlassCard variant="light" padding="md" style={styles.calendarCard}>
                             <FoodCalendar
                                 foodCounts={foodCounts}
+                                wellnessDates={wellnessDates}
                                 selectedDate={selectedDate}
                                 onSelectDate={handleDateSelect}
                             />
@@ -331,37 +451,63 @@ export default function TrackingScreen() {
                             </Text>
                         </View>
 
-                        {/* Wellness for selected day */}
-                        {selectedDayWellness && (
-                            <GlassCard variant="light" padding="md" style={styles.wellnessCard}>
-                                <View style={styles.wellnessHeader}>
-                                    <Ionicons name="heart" size={18} color={looviColors.accent.primary} />
-                                    <Text style={styles.wellnessTitle}>Wellness</Text>
-                                </View>
+                        {/* Wellness Status - Shows data if exists, or Add button if missing */}
+                        <GlassCard variant="light" padding="md" style={styles.wellnessCard}>
+                            <View style={styles.wellnessHeader}>
+                                <Ionicons name="heart" size={18} color={looviColors.accent.primary} />
+                                <Text style={styles.wellnessTitle}>Wellness</Text>
+                                {selectedDayWellness && (
+                                    <TouchableOpacity
+                                        style={styles.wellnessEditButton}
+                                        onPress={() => setShowWellnessModal(true)}
+                                    >
+                                        <Text style={styles.wellnessEditText}>Edit</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                            {selectedDayWellness ? (
                                 <View style={styles.wellnessMetrics}>
                                     <View style={styles.wellnessMetric}>
-                                        <Text style={styles.wellnessEmoji}>😊</Text>
+                                        <View style={[styles.wellnessIconBg, { backgroundColor: `${looviColors.accent.primary}15` }]}>
+                                            <Ionicons name="happy-outline" size={18} color={looviColors.accent.primary} />
+                                        </View>
                                         <Text style={styles.wellnessLabel}>Mood</Text>
                                         <Text style={styles.wellnessValue}>{selectedDayWellness.mood}/5</Text>
                                     </View>
                                     <View style={styles.wellnessMetric}>
-                                        <Text style={styles.wellnessEmoji}>⚡</Text>
+                                        <View style={[styles.wellnessIconBg, { backgroundColor: `${looviColors.accent.warning}15` }]}>
+                                            <Ionicons name="flash-outline" size={18} color={looviColors.accent.warning} />
+                                        </View>
                                         <Text style={styles.wellnessLabel}>Energy</Text>
                                         <Text style={styles.wellnessValue}>{selectedDayWellness.energy}/5</Text>
                                     </View>
                                     <View style={styles.wellnessMetric}>
-                                        <Text style={styles.wellnessEmoji}>🧠</Text>
+                                        <View style={[styles.wellnessIconBg, { backgroundColor: `${looviColors.skyBlue}15` }]}>
+                                            <Ionicons name="bulb-outline" size={18} color={looviColors.skyBlue} />
+                                        </View>
                                         <Text style={styles.wellnessLabel}>Focus</Text>
                                         <Text style={styles.wellnessValue}>{selectedDayWellness.focus}/5</Text>
                                     </View>
                                     <View style={styles.wellnessMetric}>
-                                        <Text style={styles.wellnessEmoji}>😴</Text>
+                                        <View style={[styles.wellnessIconBg, { backgroundColor: `${looviColors.accent.success}15` }]}>
+                                            <Ionicons name="bed-outline" size={18} color={looviColors.accent.success} />
+                                        </View>
                                         <Text style={styles.wellnessLabel}>Sleep</Text>
                                         <Text style={styles.wellnessValue}>{selectedDayWellness.sleepHours}h</Text>
                                     </View>
                                 </View>
-                            </GlassCard>
-                        )}
+                            ) : (
+                                <TouchableOpacity
+                                    style={styles.addWellnessButton}
+                                    onPress={() => setShowWellnessModal(true)}
+                                >
+                                    <Ionicons name="add-circle-outline" size={20} color={looviColors.accent.primary} />
+                                    <Text style={styles.addWellnessText}>
+                                        Add wellness data for {isToday ? 'today' : 'this day'}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </GlassCard>
 
                         {/* Food List */}
                         <GlassCard variant="light" padding="md" style={styles.listCard}>
@@ -370,11 +516,9 @@ export default function TrackingScreen() {
                                     <Ionicons name="restaurant" size={18} color={looviColors.accent.primary} />
                                     <Text style={styles.listTitle}>Food Log</Text>
                                 </View>
-                                {isToday && (
-                                    <TouchableOpacity onPress={() => setShowScannerModal(true)}>
-                                        <Text style={styles.addButton}>+ Add</Text>
-                                    </TouchableOpacity>
-                                )}
+                                <TouchableOpacity onPress={() => setShowScannerModal(true)}>
+                                    <Text style={styles.addButton}>+ Add</Text>
+                                </TouchableOpacity>
                             </View>
                             <FoodLogList
                                 items={selectedDayFoods}
@@ -466,12 +610,15 @@ export default function TrackingScreen() {
                         visible={showScannerModal}
                         onClose={() => setShowScannerModal(false)}
                         onScanComplete={handleScanComplete}
+                        selectedDate={selectedDate}
                     />
 
                     <WellnessModal
                         visible={showWellnessModal}
                         onClose={() => setShowWellnessModal(false)}
                         onSave={handleWellnessSave}
+                        selectedDate={selectedDate}
+                        existingData={selectedDayWellness}
                     />
 
                     <JournalEntryModal
@@ -582,6 +729,26 @@ const wellnessStyles = StyleSheet.create({
     sleepSection: {
         marginBottom: spacing.lg,
     },
+    sleepHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: spacing.sm,
+    },
+    syncButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        backgroundColor: 'rgba(0,0,0,0.05)',
+        borderRadius: 12,
+    },
+    syncButtonText: {
+        fontSize: 10,
+        color: looviColors.accent.primary,
+        fontWeight: '600',
+    },
     sleepButtons: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -611,6 +778,10 @@ const wellnessStyles = StyleSheet.create({
         borderRadius: borderRadius.xl,
         alignItems: 'center',
         marginTop: spacing.md,
+    },
+    saveButtonDisabled: {
+        backgroundColor: looviColors.text.muted,
+        opacity: 0.6,
     },
     saveButtonText: {
         fontSize: 16,
@@ -673,6 +844,28 @@ const styles = StyleSheet.create({
         color: looviColors.text.tertiary,
         marginTop: 2,
         textAlign: 'center',
+    },
+    actionIconContainer: {
+        position: 'relative',
+    },
+    loggedBadge: {
+        position: 'absolute',
+        top: -6,
+        right: -6,
+        minWidth: 24,
+        height: 24,
+        paddingHorizontal: 6,
+        borderRadius: 12,
+        backgroundColor: looviColors.accent.success,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: '#FFFFFF',
+    },
+    sugarBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#FFFFFF',
     },
     calendarCard: {
         marginBottom: spacing.lg,
@@ -783,8 +976,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         flex: 1,
     },
-    wellnessEmoji: {
-        fontSize: 24,
+    wellnessIconBg: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
         marginBottom: spacing.xs,
     },
     wellnessLabel: {
@@ -797,5 +994,32 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '700',
         color: looviColors.text.primary,
+    },
+    wellnessEditButton: {
+        marginLeft: 'auto',
+        paddingHorizontal: spacing.sm,
+        paddingVertical: 4,
+    },
+    wellnessEditText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: looviColors.accent.primary,
+    },
+    addWellnessButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.sm,
+        paddingVertical: spacing.md,
+        borderRadius: borderRadius.lg,
+        backgroundColor: `${looviColors.accent.primary}10`,
+        borderWidth: 1,
+        borderColor: `${looviColors.accent.primary}30`,
+        borderStyle: 'dashed',
+    },
+    addWellnessText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: looviColors.accent.primary,
     },
 });

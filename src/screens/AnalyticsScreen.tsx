@@ -32,7 +32,9 @@ import { useUserData } from '../context/UserDataContext';
 import { TimeframeToggle, Timeframe } from '../components/TimeframeToggle';
 import { HealthScoreRing } from '../components/HealthScoreRing';
 import { HealthScoreTrend } from '../components/HealthScoreTrend';
+import { SugarConsumptionTrend } from '../components/SugarConsumptionTrend';
 import { SwipeableTabView } from '../components/SwipeableTabView';
+import JournalEntryModal from '../components/JournalEntryModal';
 import { PlanType } from '../utils/planUtils';
 import { AppIcon } from '../components/OnboardingIcon';
 import { getScannedItems, ScannedItem } from '../services/scannerService';
@@ -65,7 +67,8 @@ export default function AnalyticsScreen() {
     const [healthScore, setHealthScore] = useState({ overall: 0, nutrition: 0, wellness: 0 });
     const [nutritionInsights, setNutritionInsights] = useState<ReturnType<typeof getNutritionInsights> | null>(null);
     const [trendData, setTrendData] = useState<{ date: string; score: number }[]>([]);
-    const { onboardingData, checkInHistory, recordCheckInForDate, streakData } = useUserData();
+    const [showJournalModal, setShowJournalModal] = useState(false);
+    const { onboardingData, checkInHistory, recordCheckInForDate, streakData, addJournalEntry } = useUserData();
 
     const startDateString = onboardingData.startDate;
     const startDate = useMemo(() => startDateString ? new Date(startDateString) : new Date(), [startDateString]);
@@ -258,7 +261,10 @@ export default function AnalyticsScreen() {
                         {/* Health Score Trend */}
                         {trendData.length > 0 && (
                             <GlassCard variant="light" padding="lg" style={styles.trendCard}>
-                                <HealthScoreTrend data={trendData} />
+                                <HealthScoreTrend
+                                    data={trendData}
+                                    timeframeDays={timeframe === '7d' ? 7 : timeframe === '1m' ? 30 : 90}
+                                />
                             </GlassCard>
                         )}
 
@@ -268,18 +274,14 @@ export default function AnalyticsScreen() {
                         </View>
                         <GlassCard variant="light" padding="lg" style={styles.chartCard}>
                             {scannedItems.length > 0 ? (
-                                <>
-                                    <View style={styles.sugarSummary}>
-                                        <Ionicons name="nutrition" size={40} color={looviColors.accent.primary} />
-                                        <Text style={styles.sugarSummaryValue}>
-                                            {Math.round(nutritionInsights?.avgAddedSugar || 0)}g
-                                        </Text>
-                                        <Text style={styles.sugarSummaryLabel}>Avg daily added sugar</Text>
-                                        <Text style={styles.sugarSummarySubtext}>
-                                            Based on your logged food items
-                                        </Text>
-                                    </View>
-                                </>
+                                <SugarConsumptionTrend
+                                    data={scannedItems.map(item => ({
+                                        date: item.timestamp.split('T')[0],
+                                        sugar: item.sugar || 0,
+                                    }))}
+                                    timeframeDays={timeframe === '7d' ? 7 : timeframe === '1m' ? 30 : 90}
+                                    targetGrams={25}
+                                />
                             ) : (
                                 <View style={styles.emptyChart}>
                                     <Text style={styles.emptyChartEmoji}>📊</Text>
@@ -370,8 +372,8 @@ export default function AnalyticsScreen() {
                                                 {
                                                     backgroundColor:
                                                         nutritionInsights.sugarStatus === 'excellent' ? 'rgba(34, 197, 94, 0.1)' :
-                                                        nutritionInsights.sugarStatus === 'good' ? 'rgba(245, 158, 11, 0.1)' :
-                                                        'rgba(239, 68, 68, 0.1)'
+                                                            nutritionInsights.sugarStatus === 'good' ? 'rgba(245, 158, 11, 0.1)' :
+                                                                'rgba(239, 68, 68, 0.1)'
                                                 }
                                             ]}>
                                                 <Text style={[
@@ -379,20 +381,20 @@ export default function AnalyticsScreen() {
                                                     {
                                                         color:
                                                             nutritionInsights.sugarStatus === 'excellent' ? '#22C55E' :
-                                                            nutritionInsights.sugarStatus === 'good' ? '#F59E0B' :
-                                                            '#EF4444'
+                                                                nutritionInsights.sugarStatus === 'good' ? '#F59E0B' :
+                                                                    '#EF4444'
                                                     }
                                                 ]}>
                                                     {nutritionInsights.sugarStatus === 'excellent' ? 'Excellent!' :
-                                                     nutritionInsights.sugarStatus === 'good' ? 'Good' :
-                                                     nutritionInsights.sugarStatus === 'high' ? 'High' : 'Very High'}
+                                                        nutritionInsights.sugarStatus === 'good' ? 'Good' :
+                                                            nutritionInsights.sugarStatus === 'high' ? 'High' : 'Very High'}
                                                 </Text>
                                             </View>
                                         </View>
                                         <Text style={styles.sugarStatusHint}>
                                             {nutritionInsights.sugarStatus === 'excellent' ? 'Keep up the great work staying below 25g!' :
-                                             nutritionInsights.sugarStatus === 'good' ? 'Try to stay below 50g per day' :
-                                             'WHO recommends less than 50g of added sugar per day'}
+                                                nutritionInsights.sugarStatus === 'good' ? 'Try to stay below 50g per day' :
+                                                    'WHO recommends less than 50g of added sugar per day'}
                                         </Text>
                                     </View>
 
@@ -468,7 +470,7 @@ export default function AnalyticsScreen() {
                             </Text>
                             <TouchableOpacity
                                 style={styles.journalButton}
-                                onPress={() => navigation.navigate('Track', { tab: 'journal' })}
+                                onPress={() => setShowJournalModal(true)}
                                 activeOpacity={0.8}
                             >
                                 <Ionicons name="book" size={18} color="#8B5CF6" />
@@ -477,6 +479,16 @@ export default function AnalyticsScreen() {
                         </GlassCard>
 
                     </ScrollView>
+
+                    {/* Journal Modal */}
+                    <JournalEntryModal
+                        visible={showJournalModal}
+                        onClose={() => setShowJournalModal(false)}
+                        onSave={async (entry) => {
+                            await addJournalEntry(new Date(), entry);
+                            setShowJournalModal(false);
+                        }}
+                    />
                 </SafeAreaView>
             </LooviBackground>
         </SwipeableTabView>
@@ -844,6 +856,7 @@ const styles = StyleSheet.create({
         alignItems: 'flex-start',
         gap: spacing.sm,
         marginBottom: spacing.sm,
+        width: '100%',
     },
     recommendationText: {
         flex: 1,

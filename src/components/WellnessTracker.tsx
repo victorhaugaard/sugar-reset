@@ -4,15 +4,15 @@
  * Displays 7-day average progress bars for wellness metrics:
  * Mood, Energy, Focus, Sleep
  * 
- * Redesigned with coral/peach theme colors and modern styling.
+ * Features bar progress visualization with matching colors.
  */
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { spacing, borderRadius } from '../theme';
 import { looviColors } from './LooviBackground';
 import { GlassCard } from './GlassCard';
-import { AppIcon } from './OnboardingIcon';
 
 export interface WellnessData {
     mood: number;      // 1-5 scale
@@ -28,17 +28,21 @@ interface WellnessTrackerProps {
 
 interface MetricBarProps {
     label: string;
-    emoji: string;
+    iconName: keyof typeof Ionicons.glyphMap;
+    iconColor: string;
     value: number;  // 0-100 percentage
+    displayValue: string;
     color: string;
     bgColor: string;
 }
 
-function MetricBar({ label, emoji, value, color, bgColor }: MetricBarProps) {
+function MetricBar({ label, iconName, iconColor, value, displayValue, color, bgColor }: MetricBarProps) {
     return (
         <View style={styles.metricRow}>
             <View style={styles.metricLabelContainer}>
-                <AppIcon emoji={emoji} size={16} />
+                <View style={[styles.metricIconBg, { backgroundColor: `${iconColor}15` }]}>
+                    <Ionicons name={iconName} size={14} color={iconColor} />
+                </View>
                 <Text style={styles.metricLabelText}>{label}</Text>
             </View>
             <View style={[styles.metricTrack, { backgroundColor: bgColor }]}>
@@ -49,7 +53,7 @@ function MetricBar({ label, emoji, value, color, bgColor }: MetricBarProps) {
                     ]}
                 />
             </View>
-            <Text style={styles.metricValue}>{Math.round(value)}%</Text>
+            <Text style={styles.metricValue}>{displayValue}</Text>
         </View>
     );
 }
@@ -65,38 +69,49 @@ export function WellnessTracker({ averages }: WellnessTrackerProps) {
     return (
         <GlassCard variant="light" padding="lg" style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.title}>7-Day Wellness</Text>
+                <View style={styles.headerLeft}>
+                    <Ionicons name="heart" size={18} color={looviColors.accent.primary} />
+                    <Text style={styles.title}>7-Day Wellness</Text>
+                </View>
                 <Text style={styles.subtitle}>Your averages</Text>
             </View>
 
             <View style={styles.metricsContainer}>
                 <MetricBar
                     label="Mood"
-                    emoji="😊"
+                    iconName="happy-outline"
+                    iconColor={looviColors.accent.primary}
                     value={moodPercent}
-                    color={looviColors.coralOrange}
-                    bgColor="rgba(217, 123, 102, 0.15)"
+                    displayValue={averages.mood.toFixed(1)}
+                    color={looviColors.accent.primary}
+                    bgColor={`${looviColors.accent.primary}15`}
                 />
                 <MetricBar
                     label="Energy"
-                    emoji="⚡"
+                    iconName="flash-outline"
+                    iconColor={looviColors.accent.warning}
                     value={energyPercent}
-                    color="#F59E0B"
-                    bgColor="rgba(245, 158, 11, 0.15)"
+                    displayValue={averages.energy.toFixed(1)}
+                    color={looviColors.accent.warning}
+                    bgColor={`${looviColors.accent.warning}15`}
                 />
                 <MetricBar
                     label="Focus"
-                    emoji="🎯"
+                    iconName="bulb-outline"
+                    iconColor="#8B5CF6"
                     value={focusPercent}
+                    displayValue={averages.focus.toFixed(1)}
                     color="#8B5CF6"
                     bgColor="rgba(139, 92, 246, 0.15)"
                 />
                 <MetricBar
                     label="Sleep"
-                    emoji="😴"
+                    iconName="bed-outline"
+                    iconColor={looviColors.accent.success}
                     value={sleepPercent}
-                    color="#3B82F6"
-                    bgColor="rgba(59, 130, 246, 0.15)"
+                    displayValue={`${averages.sleep.toFixed(1)}h`}
+                    color={looviColors.accent.success}
+                    bgColor={`${looviColors.accent.success}15`}
                 />
             </View>
         </GlassCard>
@@ -110,8 +125,13 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'baseline',
+        alignItems: 'center',
         marginBottom: spacing.md,
+    },
+    headerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
     },
     title: {
         fontSize: 16,
@@ -131,10 +151,17 @@ const styles = StyleSheet.create({
         gap: spacing.sm,
     },
     metricLabelContainer: {
-        width: 80,
+        width: 90,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
+    },
+    metricIconBg: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     metricLabelText: {
         fontSize: 13,
@@ -152,7 +179,7 @@ const styles = StyleSheet.create({
         borderRadius: 5,
     },
     metricValue: {
-        width: 40,
+        width: 35,
         fontSize: 12,
         fontWeight: '600',
         color: looviColors.text.secondary,

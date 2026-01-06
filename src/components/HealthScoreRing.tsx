@@ -262,19 +262,24 @@ const styles = StyleSheet.create({
     glowContainer: {
         position: 'absolute',
         top: spacing.md,
+        width: 160,
+        height: 160,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     glowCircle: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        opacity: 0.2,
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        opacity: 0.25,
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 40,
+        shadowOpacity: 0.6,
+        shadowRadius: 30,
         elevation: 10,
     },
     ringContainer: {
-        position: 'relative',
+        width: 160,
+        height: 160,
         justifyContent: 'center',
         alignItems: 'center',
         // Subtle shadow for depth
@@ -286,6 +291,9 @@ const styles = StyleSheet.create({
     },
     scoreContainer: {
         position: 'absolute',
+        width: 160,
+        height: 160,
+        justifyContent: 'center',
         alignItems: 'center',
     },
     scoreValue: {

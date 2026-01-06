@@ -5,7 +5,7 @@
  * New workflow: Photo → Optional description → AI Analysis → Confirmation/Edit → Portion → Save
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -33,12 +33,14 @@ import {
     ScannedItem,
     AnalysisResult,
     getHealthScoreColor,
+    getScannedItems,
 } from '../services/scannerService';
 
 interface FoodScannerModalProps {
     visible: boolean;
     onClose: () => void;
     onScanComplete: (item: ScannedItem) => void;
+    selectedDate?: string; // For backdating (YYYY-MM-DD format)
 }
 
 type ScanStep = 'select' | 'describe' | 'analyzing' | 'result';
@@ -47,6 +49,7 @@ export default function FoodScannerModal({
     visible,
     onClose,
     onScanComplete,
+    selectedDate,
 }: FoodScannerModalProps) {
     const [step, setStep] = useState<ScanStep>('select');
     const [imageUri, setImageUri] = useState<string | null>(null);
@@ -55,6 +58,30 @@ export default function FoodScannerModal({
     const [portionPercent, setPortionPercent] = useState(100);
     const [editedName, setEditedName] = useState('');
     const [isEditing, setIsEditing] = useState(false);
+    const [recentFoods, setRecentFoods] = useState<ScannedItem[]>([]);
+
+    // Load recent foods when modal opens
+    useEffect(() => {
+        if (visible) {
+            loadRecentFoods();
+        }
+    }, [visible]);
+
+    const loadRecentFoods = async () => {
+        try {
+            const items = await getScannedItems();
+            // Get unique items by name, most recent first, limit to 10
+            const uniqueMap = new Map<string, ScannedItem>();
+            items.forEach(item => {
+                if (!uniqueMap.has(item.name)) {
+                    uniqueMap.set(item.name, item);
+                }
+            });
+            setRecentFoods(Array.from(uniqueMap.values()).slice(0, 10));
+        } catch (error) {
+            console.error('Error loading recent foods:', error);
+        }
+    };
 
     const resetState = () => {
         setStep('select');
@@ -64,6 +91,27 @@ export default function FoodScannerModal({
         setPortionPercent(100);
         setEditedName('');
         setIsEditing(false);
+    };
+
+    const quickAddRecent = async (item: ScannedItem) => {
+        // Create a copy with new ID and timestamp for the selected date
+        const timestamp = selectedDate
+            ? new Date(selectedDate + 'T12:00:00').toISOString()
+            : new Date().toISOString();
+
+        const newItem: ScannedItem = {
+            ...item,
+            id: generateScanId(),
+            timestamp,
+        };
+
+        try {
+            await saveScannedItem(newItem);
+            onScanComplete(newItem);
+            handleClose();
+        } catch (error) {
+            Alert.alert('Error', 'Failed to add food item.');
+        }
     };
 
     const handleClose = () => {
@@ -137,11 +185,16 @@ export default function FoodScannerModal({
         // Apply portion percentage to macros
         const portionMultiplier = portionPercent / 100;
 
+        // Create timestamp based on selectedDate or current time
+        const timestamp = selectedDate
+            ? new Date(selectedDate + 'T12:00:00').toISOString() // Use noon on selected date
+            : new Date().toISOString();
+
         const scannedItem: ScannedItem = {
             id: generateScanId(),
             imageUri,
             name: editedName || result.foodName,
-            timestamp: new Date().toISOString(),
+            timestamp,
             portionPercent,
             calories: Math.round(result.calories * portionMultiplier),
             protein: Math.round(result.protein * portionMultiplier * 10) / 10,
@@ -170,10 +223,10 @@ export default function FoodScannerModal({
         switch (step) {
             case 'select':
                 return (
-                    <>
-                        <Text style={styles.modalTitle}>Scan Food</Text>
+                    <ScrollView style={styles.selectScrollView} showsVerticalScrollIndicator={false}>
+                        <Text style={styles.modalTitle}>Add Food</Text>
                         <Text style={styles.modalSubtitle}>
-                            Take a photo of your food or nutrition label
+                            Scan a new item or quickly add from recent foods
                         </Text>
 
                         <View style={styles.optionsContainer}>
@@ -196,10 +249,37 @@ export default function FoodScannerModal({
                             </TouchableOpacity>
                         </View>
 
+                        {/* Recently Scanned Foods */}
+                        {recentFoods.length > 0 && (
+                            <View style={styles.recentSection}>
+                                <Text style={styles.recentTitle}>Quick Add - Recent Foods</Text>
+                                <View style={styles.recentList}>
+                                    {recentFoods.map((item) => (
+                                        <TouchableOpacity
+                                            key={item.id}
+                                            style={styles.recentItem}
+                                            onPress={() => quickAddRecent(item)}
+                                            activeOpacity={0.8}
+                                        >
+                                            <View style={styles.recentInfo}>
+                                                <Text style={styles.recentName} numberOfLines={1}>
+                                                    {item.name}
+                                                </Text>
+                                                <Text style={styles.recentMacros}>
+                                                    {item.calories}cal · {item.sugar}g sugar
+                                                </Text>
+                                            </View>
+                                            <Text style={styles.recentAddIcon}>+</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
+
                         <TouchableOpacity style={styles.cancelButton} onPress={handleClose}>
                             <Text style={styles.cancelText}>Cancel</Text>
                         </TouchableOpacity>
-                    </>
+                    </ScrollView>
                 );
 
             case 'describe':
@@ -681,5 +761,52 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '600',
         color: '#FFFFFF',
+    },
+    // Recently scanned foods styles
+    selectScrollView: {
+        flex: 1,
+    },
+    recentSection: {
+        marginTop: spacing.xl,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0, 0, 0, 0.05)',
+        paddingTop: spacing.lg,
+    },
+    recentTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: looviColors.text.secondary,
+        marginBottom: spacing.sm,
+    },
+    recentList: {
+        gap: spacing.xs,
+    },
+    recentItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.md,
+        backgroundColor: 'rgba(0, 0, 0, 0.03)',
+        borderRadius: borderRadius.md,
+    },
+    recentInfo: {
+        flex: 1,
+    },
+    recentName: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: looviColors.text.primary,
+        marginBottom: 2,
+    },
+    recentMacros: {
+        fontSize: 12,
+        fontWeight: '400',
+        color: looviColors.text.tertiary,
+    },
+    recentAddIcon: {
+        fontSize: 20,
+        fontWeight: '600',
+        color: looviColors.accent.primary,
+        paddingHorizontal: spacing.sm,
     },
 });

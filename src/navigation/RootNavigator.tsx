@@ -135,10 +135,11 @@ function MainTabNavigator() {
                                 <Feather name="heart" size={26} color="#FFFFFF" />
                             </View>
                             <Text style={{
-                                fontSize: 10,
+                                fontSize: 7,
                                 fontWeight: '600',
                                 color: focused ? '#EF4444' : '#6B7280',
                                 marginTop: 4,
+                                letterSpacing: -0.5,
                             }}>CRAVING</Text>
                         </View>
                     ),

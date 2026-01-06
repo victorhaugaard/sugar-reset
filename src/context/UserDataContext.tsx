@@ -43,6 +43,10 @@ interface UserDataContextType {
     // Journal entries
     journalEntries: JournalEntry[];
 
+    // Social & Stats (Phase 1)
+    latestHealthScore: number;
+    updateHealthScore: (score: number) => void;
+
     // Loading states
     isLoading: boolean;
 
@@ -96,6 +100,7 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
     const [checkInHistory, setCheckInHistory] = useState<Record<string, { status: 'sugar_free' | 'had_sugar'; grams?: number }>>({});
     const [achievements, setAchievements] = useState<string[]>([]);
     const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+    const [latestHealthScore, setLatestHealthScore] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
@@ -376,7 +381,26 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
         deleteJournalEntry,
         getLatestJournalEntry,
         getJournalEntries,
+        latestHealthScore,
+        updateHealthScore: setLatestHealthScore,
     };
+
+    // Sync stats to Firestore when they change (Phase 1)
+    useEffect(() => {
+        if (isAuthenticated && userId && streakData) {
+            // Debounce sync slightly or just sync on change (firestore handles merge)
+            // We only sync if we have meaningful data
+            userService.syncUserStats(userId, {
+                currentStreak: streakData.currentStreak,
+                healthScore: latestHealthScore,
+                goalAchieved: streakData.currentStreak > 0, // Simplified for now
+                feeling: todayCheckIn?.mood === 5 ? 'great' : todayCheckIn?.mood === 4 ? 'good' : todayCheckIn?.mood === 3 ? 'okay' : todayCheckIn?.mood ? 'struggling' : null,
+                updatedAt: new Date(),
+            }).catch(err => {
+                console.error('Failed to sync user stats:', err);
+            });
+        }
+    }, [isAuthenticated, userId, streakData, latestHealthScore, todayCheckIn?.mood]);
 
     return (
         <UserDataContext.Provider value={value}>

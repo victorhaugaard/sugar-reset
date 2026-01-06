@@ -20,7 +20,7 @@ import {
     addDoc,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { User, UserPreferences, StreakData, DailyCheckIn } from '../types';
+import { User, UserStats, UserPreferences, StreakData, DailyCheckIn, Friend } from '../types';
 
 /**
  * Convert Firestore timestamp to Date
@@ -230,6 +230,91 @@ export const userService = {
             sleepQuality: data.sleepQuality,
             createdAt: toDate(data.createdAt) as Date,
         };
+    },
+
+    /**
+     * Check if a username is available
+     * Phase 1: User Profiles
+     */
+    async checkUsernameAvailable(username: string): Promise<boolean> {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('username', '==', username), limit(1));
+        const snapshot = await getDocs(q);
+        return snapshot.empty;
+    },
+
+    /**
+     * Update user's username
+     * Phase 1: User Profiles
+     */
+    async updateUsername(userId: string, username: string): Promise<void> {
+        // Double check availability to prevent race conditions
+        const isAvailable = await this.checkUsernameAvailable(username);
+        if (!isAvailable) {
+            throw new Error('Username is already taken');
+        }
+
+        const docRef = doc(db, 'users', userId);
+        await updateDoc(docRef, {
+            username,
+            updatedAt: serverTimestamp(),
+        });
+    },
+
+    /**
+     * Sync user stats to public collection
+     * Phase 1: Use Profiles & Stats Sync
+     */
+    async syncUserStats(userId: string, stats: Partial<UserStats>): Promise<void> {
+        const docRef = doc(db, 'userStats', userId);
+
+        // We use setDoc with merge: true to create if not exists or update
+        await setDoc(docRef, {
+            ...stats,
+            userId,
+            updatedAt: serverTimestamp(),
+        }, { merge: true });
+    },
+
+    /**
+     * Search users by username or email
+     * Phase 2: Friend System
+     */
+    async searchUsers(queryText: string): Promise<User[]> {
+        const searchText = queryText.toLowerCase();
+        // Note: Firestore text search is limited. 
+        // We'll search by exact username match first, effectively. 
+        // For a real app, we'd use Algolia or similar.
+
+        const usersRef = collection(db, 'users');
+        // Simple exact match on username for now
+        const usernameQuery = query(
+            usersRef,
+            where('username', '>=', searchText),
+            where('username', '<=', searchText + '\uf8ff'),
+            limit(10)
+        );
+
+        const snapshot = await getDocs(usernameQuery);
+
+        return snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                email: data.email, // In real app, might want to hide email
+                username: data.username,
+                displayName: data.displayName,
+                photoURL: data.photoURL,
+                createdAt: toDate(data.createdAt) as Date,
+                updatedAt: toDate(data.updatedAt) as Date,
+                preferences: data.preferences,
+                streak: {
+                    ...data.streak,
+                    lastCheckIn: toDate(data.streak?.lastCheckIn),
+                    startDate: toDate(data.streak?.startDate) as Date,
+                },
+            };
+        });
     },
 };
 
