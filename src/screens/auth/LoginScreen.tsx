@@ -14,32 +14,55 @@ import {
     KeyboardAvoidingView,
     Platform,
     ScrollView,
+    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { spacing, borderRadius } from '../../theme';
 import LooviBackground, { looviColors } from '../../components/LooviBackground';
 import { GlassCard } from '../../components/GlassCard';
+import { useAuth } from '../../hooks/useAuth';
 
 type LoginScreenProps = {
     navigation: NativeStackNavigationProp<any, 'Login'>;
 };
 
 export default function LoginScreen({ navigation }: LoginScreenProps) {
+    const { signIn } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
     const handleLogin = async () => {
         setLoading(true);
-        // TODO: Implement login
-        setTimeout(() => {
+        setError('');
+
+        try {
+            const success = await signIn(email.trim(), password);
+            if (success) {
+                // Navigate to Main app after successful login
+                console.log('Login successful - navigating to Main');
+                navigation.getParent()?.reset({
+                    index: 0,
+                    routes: [{ name: 'Main' }],
+                });
+            } else {
+                setError('Invalid email or password');
+                setLoading(false);
+            }
+        } catch (err: any) {
+            console.error('Login error:', err);
+            const errorMessage = err?.message || 'Failed to sign in';
+            if (errorMessage.includes('invalid-credential') || errorMessage.includes('user-not-found')) {
+                setError('Invalid email or password');
+            } else if (errorMessage.includes('too-many-requests')) {
+                setError('Too many attempts. Try again later.');
+            } else {
+                setError('Login failed. Please try again.');
+            }
             setLoading(false);
-            navigation.getParent()?.reset({
-                index: 0,
-                routes: [{ name: 'Main' }],
-            });
-        }, 1000);
+        }
     };
 
     const handleForgotPassword = () => {
@@ -104,6 +127,10 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                             <TouchableOpacity onPress={handleForgotPassword}>
                                 <Text style={styles.forgotText}>Forgot password?</Text>
                             </TouchableOpacity>
+
+                            {error ? (
+                                <Text style={styles.errorText}>{error}</Text>
+                            ) : null}
                         </GlassCard>
 
                         {/* Login Button */}
@@ -227,5 +254,12 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: looviColors.accent.primary,
+    },
+    errorText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: looviColors.accent.error,
+        textAlign: 'center',
+        marginTop: spacing.md,
     },
 });

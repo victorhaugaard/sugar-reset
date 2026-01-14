@@ -59,7 +59,7 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
                 }),
             ]),
             // Phase 2: Hold for a moment
-            Animated.delay(1500),
+            Animated.delay(2500),
             // Phase 3: Fade out splash
             Animated.timing(splashOpacity, {
                 toValue: 0,
@@ -124,7 +124,7 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
             {showSplash && (
                 <Animated.View style={[styles.splashContainer, { opacity: splashOpacity }]}>
                     <Animated.Image
-                        source={require('../../public/sugarestlogo.png')}
+                        source={require('../../public/sugarest_icon.png')}
                         style={[
                             styles.splashLogo,
                             {

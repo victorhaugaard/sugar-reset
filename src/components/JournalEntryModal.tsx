@@ -1,8 +1,8 @@
 /**
  * JournalEntryModal Component
  * 
- * Modal for creating/editing daily journal entries
- * Appears after slip-ups or can be opened manually
+ * Modal for creating/editing daily journal entries with wellness tracking
+ * Includes mood, energy, focus, and sleep scales
  */
 
 import React, { useState } from 'react';
@@ -20,9 +20,9 @@ import {
     Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GlassCard } from './GlassCard';
+import Slider from '@react-native-community/slider';
 import { spacing, borderRadius } from '../theme';
-import { skyColors } from './SkyBackground';
+import { looviColors } from './LooviBackground';
 
 interface JournalEntryModalProps {
     visible: boolean;
@@ -35,18 +35,15 @@ interface JournalEntryModalProps {
 }
 
 export interface JournalEntryData {
-    mood?: 'great' | 'good' | 'okay' | 'struggling' | 'difficult';
+    // Wellness scales (1-5)
+    mood?: number;
+    energy?: number;
+    focus?: number;
+    sleep?: number;
+    // Notes
     notes: string;
     whatTriggered?: string;
 }
-
-const MOOD_OPTIONS = [
-    { value: 'great', icon: 'happy' as const, label: 'Great', color: '#22C55E' },
-    { value: 'good', icon: 'happy-outline' as const, label: 'Good', color: '#84CC16' },
-    { value: 'okay', icon: 'remove-circle-outline' as const, label: 'Okay', color: '#F59E0B' },
-    { value: 'struggling', icon: 'sad-outline' as const, label: 'Struggling', color: '#F97316' },
-    { value: 'difficult', icon: 'sad' as const, label: 'Difficult', color: '#EF4444' },
-] as const;
 
 export function JournalEntryModal({
     visible,
@@ -56,18 +53,24 @@ export function JournalEntryModal({
     existingEntry,
     isAfterSlipUp = false,
 }: JournalEntryModalProps) {
-    const [mood, setMood] = useState<JournalEntryData['mood']>(existingEntry?.mood);
+    // Wellness scales (1-5)
+    const [mood, setMood] = useState<number>(existingEntry?.mood || 3);
+    const [energy, setEnergy] = useState<number>(existingEntry?.energy || 3);
+    const [focus, setFocus] = useState<number>(existingEntry?.focus || 3);
+    const [sleep, setSleep] = useState<number>(existingEntry?.sleep || 7);
+
     const [notes, setNotes] = useState(existingEntry?.notes || '');
     const [whatTriggered, setWhatTriggered] = useState(existingEntry?.whatTriggered || '');
     const [isSaving, setIsSaving] = useState(false);
 
     const handleSave = async () => {
-        if (!notes.trim()) return;
-
         setIsSaving(true);
         try {
             await onSave({
                 mood,
+                energy,
+                focus,
+                sleep,
                 notes: notes.trim(),
                 whatTriggered: whatTriggered.trim() || undefined,
             });
@@ -80,7 +83,10 @@ export function JournalEntryModal({
     };
 
     const handleClose = () => {
-        setMood(undefined);
+        setMood(3);
+        setEnergy(3);
+        setFocus(3);
+        setSleep(7);
         setNotes('');
         setWhatTriggered('');
         onClose();
@@ -91,6 +97,70 @@ export function JournalEntryModal({
         month: 'short',
         day: 'numeric',
     });
+
+    const renderScaleSlider = (
+        value: number,
+        setValue: (v: number) => void,
+        iconName: keyof typeof Ionicons.glyphMap,
+        label: string,
+        color: string
+    ) => (
+        <View style={styles.scaleContainer}>
+            <View style={styles.sliderHeader}>
+                <View style={[styles.iconContainer, { backgroundColor: `${color}15` }]}>
+                    <Ionicons name={iconName} size={18} color={color} />
+                </View>
+                <View style={styles.sliderLabelContainer}>
+                    <Text style={styles.scaleLabel}>{label}</Text>
+                    <Text style={[styles.scaleValue, { color }]}>{value}/5</Text>
+                </View>
+            </View>
+            <Slider
+                style={styles.slider}
+                minimumValue={1}
+                maximumValue={5}
+                step={1}
+                value={value}
+                onValueChange={setValue}
+                minimumTrackTintColor={color}
+                maximumTrackTintColor="rgba(0,0,0,0.1)"
+                thumbTintColor={color}
+            />
+            <View style={styles.scaleLabels}>
+                <Text style={styles.scaleLabelMin}>Low</Text>
+                <Text style={styles.scaleLabelMax}>High</Text>
+            </View>
+        </View>
+    );
+
+    const renderSleepSlider = () => (
+        <View style={styles.scaleContainer}>
+            <View style={styles.sliderHeader}>
+                <View style={[styles.iconContainer, { backgroundColor: `${looviColors.accent.success}15` }]}>
+                    <Ionicons name="bed-outline" size={18} color={looviColors.accent.success} />
+                </View>
+                <View style={styles.sliderLabelContainer}>
+                    <Text style={styles.scaleLabel}>Sleep</Text>
+                    <Text style={[styles.scaleValue, { color: looviColors.accent.success }]}>{sleep}h</Text>
+                </View>
+            </View>
+            <Slider
+                style={styles.slider}
+                minimumValue={4}
+                maximumValue={12}
+                step={1}
+                value={sleep}
+                onValueChange={setSleep}
+                minimumTrackTintColor={looviColors.accent.success}
+                maximumTrackTintColor="rgba(0,0,0,0.1)"
+                thumbTintColor={looviColors.accent.success}
+            />
+            <View style={styles.scaleLabels}>
+                <Text style={styles.scaleLabelMin}>4h</Text>
+                <Text style={styles.scaleLabelMax}>12h</Text>
+            </View>
+        </View>
+    );
 
     return (
         <Modal
@@ -115,46 +185,35 @@ export function JournalEntryModal({
                                 >
                                     {/* Header */}
                                     <View style={styles.header}>
-                                        <Text style={styles.title}>📝 Journal Entry</Text>
+                                        <Text style={styles.title}>📝 Evening Reflection</Text>
                                         <Text style={styles.dateText}>{dateString}</Text>
                                     </View>
 
-                                    {/* Mood Selector */}
-                                    <View style={styles.section}>
-                                        <Text style={styles.sectionLabel}>How are you feeling?</Text>
-                                        <View style={styles.moodButtons}>
-                                            {MOOD_OPTIONS.map((option) => (
-                                                <TouchableOpacity
-                                                    key={option.value}
-                                                    style={[
-                                                        styles.moodButton,
-                                                        mood === option.value && [
-                                                            styles.moodButtonActive,
-                                                            { borderColor: option.color, backgroundColor: `${option.color}15` }
-                                                        ],
-                                                    ]}
-                                                    onPress={() => setMood(option.value)}
-                                                >
-                                                    <Ionicons
-                                                        name={option.icon}
-                                                        size={22}
-                                                        color={mood === option.value ? option.color : 'rgba(0,0,0,0.4)'}
-                                                    />
-                                                    <Text style={[
-                                                        styles.moodLabel,
-                                                        mood === option.value && { color: option.color, fontWeight: '600' },
-                                                    ]}>
-                                                        {option.label}
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            ))}
-                                        </View>
-                                    </View>
+                                    {/* How are you feeling? Section */}
+                                    <Text style={styles.sectionTitle}>How are you feeling?</Text>
+
+                                    {/* Mood Slider */}
+                                    {renderScaleSlider(mood, setMood, 'happy-outline', 'Mood', looviColors.accent.primary)}
+
+                                    {/* Energy Slider */}
+                                    {renderScaleSlider(energy, setEnergy, 'flash-outline', 'Energy', looviColors.accent.warning)}
+
+                                    {/* Focus Slider */}
+                                    {renderScaleSlider(focus, setFocus, 'bulb-outline', 'Focus', '#8B5CF6')}
+
+                                    {/* Sync Health Button */}
+                                    <TouchableOpacity style={styles.syncHealthButton} onPress={() => {/* TODO: Implement health sync */}}>
+                                        <Ionicons name="fitness-outline" size={16} color={looviColors.accent.primary} />
+                                        <Text style={styles.syncHealthText}>Sync with Apple Health</Text>
+                                    </TouchableOpacity>
+
+                                    {/* Sleep Slider */}
+                                    {renderSleepSlider()}
 
                                     {/* What triggered it? - Only show for slip-ups */}
                                     {isAfterSlipUp && (
                                         <View style={styles.section}>
-                                            <Text style={styles.sectionLabel}>What triggered this? (optional)</Text>
+                                            <Text style={styles.inputLabel}>What triggered this? (optional)</Text>
                                             <TextInput
                                                 style={styles.triggerInput}
                                                 placeholder="e.g., Stress at work, social event..."
@@ -168,9 +227,9 @@ export function JournalEntryModal({
                                         </View>
                                     )}
 
-                                    {/* Notes */}
+                                    {/* Notes - Optional */}
                                     <View style={styles.section}>
-                                        <Text style={styles.sectionLabel}>Your thoughts *</Text>
+                                        <Text style={styles.inputLabel}>Your thoughts (optional)</Text>
                                         <TextInput
                                             style={styles.notesInput}
                                             placeholder={isAfterSlipUp
@@ -192,10 +251,10 @@ export function JournalEntryModal({
                                         <TouchableOpacity
                                             style={[styles.button, styles.saveButton]}
                                             onPress={handleSave}
-                                            disabled={!notes.trim() || isSaving}
+                                            disabled={isSaving}
                                         >
                                             <Text style={styles.saveButtonText}>
-                                                {isSaving ? 'Saving...' : 'Save Entry'}
+                                                {isSaving ? 'Saving...' : 'Save'}
                                             </Text>
                                         </TouchableOpacity>
 
@@ -222,101 +281,154 @@ const styles = StyleSheet.create({
     },
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: spacing.lg,
     },
     modalContent: {
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderRadius: 20,
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.lg,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        maxHeight: '90%',
         width: '100%',
-        maxWidth: 360,
-        maxHeight: '80%',
+        overflow: 'hidden',
     },
     scrollView: {
         flexGrow: 0,
     },
     scrollContent: {
-        paddingBottom: spacing.md,
+        padding: spacing.lg,
     },
     header: {
         alignItems: 'center',
-        marginBottom: spacing.xl,
+        marginBottom: spacing.md,
     },
     title: {
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: '700',
-        color: '#1a1a2e',
-        marginBottom: spacing.xs,
+        color: looviColors.text.primary,
+        marginBottom: 4,
     },
     dateText: {
         fontSize: 14,
         fontWeight: '500',
-        color: 'rgba(0,0,0,0.5)',
+        color: looviColors.text.tertiary,
     },
-    section: {
-        marginBottom: spacing.xl,
-    },
-    sectionLabel: {
-        fontSize: 14,
+    sectionTitle: {
+        fontSize: 16,
         fontWeight: '600',
-        color: '#1a1a2e',
+        color: looviColors.text.primary,
+        marginBottom: spacing.md,
+        marginTop: spacing.sm,
+    },
+    // Wellness Slider Styles
+    scaleContainer: {
+        marginBottom: spacing.lg,
+    },
+    sliderHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
         marginBottom: spacing.sm,
     },
-    moodButtons: {
+    iconContainer: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: spacing.sm,
+    },
+    sliderLabelContainer: {
+        flex: 1,
         flexDirection: 'row',
         justifyContent: 'space-between',
-        gap: 4,
-    },
-    moodButton: {
-        flex: 1,
-        paddingVertical: spacing.sm,
-        paddingHorizontal: 4,
-        backgroundColor: 'rgba(0, 0, 0, 0.05)',
-        borderRadius: borderRadius.md,
         alignItems: 'center',
-        borderWidth: 2,
-        borderColor: 'transparent',
     },
-    moodButtonActive: {
-        borderWidth: 2,
+    scaleLabel: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: looviColors.text.primary,
     },
-    moodLabel: {
-        fontSize: 9,
+    scaleValue: {
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    slider: {
+        width: '100%',
+        height: 40,
+    },
+    scaleLabels: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: -8,
+        paddingHorizontal: spacing.xs,
+    },
+    scaleLabelMin: {
+        fontSize: 11,
+        color: looviColors.text.tertiary,
         fontWeight: '500',
-        color: 'rgba(0,0,0,0.5)',
-        marginTop: 2,
+    },
+    scaleLabelMax: {
+        fontSize: 11,
+        color: looviColors.text.tertiary,
+        fontWeight: '500',
+    },
+    // Sync Health Button
+    syncHealthButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.md,
+        backgroundColor: `${looviColors.accent.primary}10`,
+        borderRadius: 12,
+        marginBottom: spacing.md,
+        gap: spacing.xs,
+    },
+    syncHealthText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: looviColors.accent.primary,
+    },
+    // Section
+    section: {
+        marginTop: spacing.md,
+    },
+    inputLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: looviColors.text.primary,
+        marginBottom: spacing.sm,
     },
     triggerInput: {
-        backgroundColor: 'rgba(0, 0, 0, 0.05)',
-        borderRadius: borderRadius.lg,
+        backgroundColor: 'rgba(0,0,0,0.05)',
+        borderRadius: 12,
         padding: spacing.md,
         fontSize: 15,
-        color: '#1a1a2e',
+        color: looviColors.text.primary,
         minHeight: 60,
     },
     notesInput: {
-        backgroundColor: 'rgba(0, 0, 0, 0.05)',
-        borderRadius: borderRadius.lg,
+        backgroundColor: 'rgba(0,0,0,0.05)',
+        borderRadius: 12,
         padding: spacing.md,
         fontSize: 15,
-        color: '#1a1a2e',
-        minHeight: 100,
+        color: looviColors.text.primary,
+        minHeight: 80,
     },
     buttonContainer: {
-        gap: spacing.md,
-        marginTop: spacing.md,
+        marginTop: spacing.lg,
+        gap: spacing.sm,
     },
     button: {
-        paddingVertical: spacing.md,
-        borderRadius: borderRadius.xl,
+        paddingVertical: 14,
+        borderRadius: 24,
         alignItems: 'center',
+        flexDirection: 'row',
+        justifyContent: 'center',
     },
     saveButton: {
-        backgroundColor: '#3B82F6',
+        backgroundColor: looviColors.accent.primary,
     },
     saveButtonText: {
         fontSize: 16,
@@ -327,9 +439,9 @@ const styles = StyleSheet.create({
         backgroundColor: 'transparent',
     },
     cancelButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: 'rgba(0,0,0,0.5)',
+        fontSize: 14,
+        fontWeight: '500',
+        color: looviColors.text.tertiary,
     },
 });
 

@@ -1,513 +1,487 @@
 /**
- * AlternativesScreen (Food Scanner & Swaps)
+ * AlternativesScreen - Healthy Alternatives
  * 
- * Combined food scanning with healthy alternatives.
- * Features:
- * - Prominent scan button at top
- * - Recently scanned items
- * - Healthy food swaps organized by category
+ * Dedicated screen for healthy food alternatives during cravings.
+ * Users can describe what they're craving and get personalized alternatives.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     TouchableOpacity,
     ScrollView,
-    RefreshControl,
+    TextInput,
+    KeyboardAvoidingView,
+    Platform,
+    Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
+import { Feather } from '@expo/vector-icons';
 import { spacing, borderRadius } from '../theme';
-import LooviBackground, { looviColors } from '../components/LooviBackground';
-import { GlassCard } from '../components/GlassCard';
-import FoodScannerModal from '../components/FoodScannerModal';
-import ScannedItemCard from '../components/ScannedItemCard';
-import { SwipeableTabView } from '../components/SwipeableTabView';
-import { getScannedItems, deleteScannedItem, ScannedItem } from '../services/scannerService';
+import { LinearGradient } from 'expo-linear-gradient';
 
+const calmColors = {
+    darkBg: '#1A1A2E',
+    darkerBg: '#0F0F1E',
+    text: '#E8E8F0',
+    textSecondary: '#B0B0C8',
+    accent: '#7FB069', // Green for healthy alternatives
+    cardBg: 'rgba(255, 255, 255, 0.08)',
+    inputBg: 'rgba(255, 255, 255, 0.12)',
+};
+
+// Alternative categories with their alternatives
 interface Alternative {
     id: string;
-    emoji: string;
-    name: string;
-    swapFor: string;
-    difficulty: 'Easy' | 'Medium' | 'Hard';
+    title: string;
+    description: string;
+    keywords: string[]; // Keywords that match this alternative to cravings
 }
 
 interface Category {
     id: string;
-    emoji: string;
     name: string;
+    icon: keyof typeof Feather.glyphMap;
+    color: string;
     alternatives: Alternative[];
 }
 
-const categories: Category[] = [
+const CATEGORIES: Category[] = [
     {
-        id: 'drinks',
-        emoji: '🥤',
-        name: 'Drinks',
+        id: 'cheatmeal',
+        name: 'Cheatmeal',
+        icon: 'star',
+        color: '#C997A8',
         alternatives: [
-            { id: '1', emoji: '💧', name: 'Sparkling water with lemon', swapFor: 'Soda', difficulty: 'Easy' },
-            { id: '2', emoji: '🍵', name: 'Unsweetened green tea', swapFor: 'Sweet tea', difficulty: 'Easy' },
-            { id: '3', emoji: '☕', name: 'Black coffee', swapFor: 'Frappuccino', difficulty: 'Medium' },
+            {
+                id: 'dark-chocolate',
+                title: 'Dark Chocolate (85%+)',
+                description: 'A healthier treat that still feels indulgent',
+                keywords: ['chocolate', 'candy', 'sweet', 'dessert', 'snack'],
+            },
+            {
+                id: 'frozen-banana',
+                title: 'Frozen Banana "Ice Cream"',
+                description: 'Blend frozen bananas for creamy soft-serve',
+                keywords: ['ice cream', 'gelato', 'frozen', 'dessert', 'creamy'],
+            },
+            {
+                id: 'protein-brownie',
+                title: 'Protein Brownie',
+                description: 'Rich chocolate flavor with added protein',
+                keywords: ['brownie', 'cake', 'chocolate', 'baked'],
+            },
         ],
     },
     {
-        id: 'snacks',
-        emoji: '🍿',
-        name: 'Snacks',
+        id: 'healthy',
+        name: 'Healthy Alternative',
+        icon: 'heart',
+        color: '#7FB069',
         alternatives: [
-            { id: '4', emoji: '🥜', name: 'Mixed nuts', swapFor: 'Candy bars', difficulty: 'Easy' },
-            { id: '5', emoji: '🧀', name: 'Cheese & crackers', swapFor: 'Cookies', difficulty: 'Easy' },
-            { id: '6', emoji: '🍫', name: 'Dark chocolate (85%+)', swapFor: 'Milk chocolate', difficulty: 'Medium' },
+            {
+                id: 'apple-almond',
+                title: 'Apple with Almond Butter',
+                description: 'Sweet, satisfying, and nutritious',
+                keywords: ['sweet', 'crunchy', 'snack', 'fruit', 'candy'],
+            },
+            {
+                id: 'greek-yogurt',
+                title: 'Greek Yogurt with Berries',
+                description: 'Creamy, protein-rich satisfaction',
+                keywords: ['creamy', 'yogurt', 'dessert', 'ice cream', 'pudding'],
+            },
+            {
+                id: 'banana-cinnamon',
+                title: 'Banana with Cinnamon',
+                description: 'Simple and naturally sweet',
+                keywords: ['sweet', 'fruit', 'snack', 'simple'],
+            },
+            {
+                id: 'cottage-cheese',
+                title: 'Cottage Cheese with Honey',
+                description: 'High protein with natural sweetness',
+                keywords: ['creamy', 'cheese', 'protein', 'breakfast'],
+            },
+            {
+                id: 'trail-mix',
+                title: 'Homemade Trail Mix',
+                description: 'Nuts, seeds, and a few dark chocolate chips',
+                keywords: ['crunchy', 'snack', 'chips', 'nuts', 'salty'],
+            },
         ],
     },
     {
-        id: 'breakfast',
-        emoji: '🍳',
-        name: 'Breakfast',
+        id: 'superfood',
+        name: 'Superfood',
+        icon: 'zap',
+        color: '#88A4D6',
         alternatives: [
-            { id: '7', emoji: '🥚', name: 'Eggs & avocado', swapFor: 'Sugary cereal', difficulty: 'Easy' },
-            { id: '8', emoji: '🥣', name: 'Plain oatmeal + berries', swapFor: 'Flavored oatmeal', difficulty: 'Easy' },
-            { id: '9', emoji: '🥛', name: 'Greek yogurt (plain)', swapFor: 'Flavored yogurt', difficulty: 'Easy' },
-        ],
-    },
-    {
-        id: 'desserts',
-        emoji: '🍰',
-        name: 'Desserts',
-        alternatives: [
-            { id: '10', emoji: '🍓', name: 'Fresh berries + cream', swapFor: 'Ice cream', difficulty: 'Easy' },
-            { id: '11', emoji: '🥥', name: 'Coconut bites', swapFor: 'Cookies', difficulty: 'Medium' },
-            { id: '12', emoji: '🍌', name: 'Frozen banana slices', swapFor: 'Candy', difficulty: 'Easy' },
+            {
+                id: 'mixed-berries',
+                title: 'Mixed Berries',
+                description: 'Antioxidant-rich and naturally sweet',
+                keywords: ['sweet', 'fruit', 'berry', 'candy', 'gummy'],
+            },
+            {
+                id: 'dates-nut',
+                title: 'Dates with Nut Butter',
+                description: 'Natural energy and sweetness',
+                keywords: ['sweet', 'caramel', 'candy', 'energy', 'chewy'],
+            },
+            {
+                id: 'chia-pudding',
+                title: 'Chia Pudding',
+                description: 'Omega-3s with dessert-like texture',
+                keywords: ['pudding', 'dessert', 'creamy', 'tapioca'],
+            },
+            {
+                id: 'acai-bowl',
+                title: 'Açaí Bowl',
+                description: 'Superfood smoothie bowl with toppings',
+                keywords: ['ice cream', 'smoothie', 'frozen', 'bowl'],
+            },
         ],
     },
 ];
 
-const difficultyColors = {
-    Easy: looviColors.accent.success,
-    Medium: looviColors.accent.warning,
-    Hard: '#EF4444',
+// Flatten all alternatives for easy searching
+const ALL_ALTERNATIVES = CATEGORIES.flatMap(cat => 
+    cat.alternatives.map(alt => ({ ...alt, category: cat }))
+);
+
+// Function to find relevant alternatives based on craving
+const findAlternatives = (craving: string): typeof ALL_ALTERNATIVES => {
+    if (!craving.trim()) {
+        // Return a default selection when no craving specified
+        return ALL_ALTERNATIVES.slice(0, 6);
+    }
+
+    const searchTerms = craving.toLowerCase().split(/\s+/);
+    
+    // Score each alternative based on keyword matches
+    const scored = ALL_ALTERNATIVES.map(alt => {
+        let score = 0;
+        searchTerms.forEach(term => {
+            alt.keywords.forEach(keyword => {
+                if (keyword.includes(term) || term.includes(keyword)) {
+                    score += 2;
+                }
+            });
+            // Also check title
+            if (alt.title.toLowerCase().includes(term)) {
+                score += 3;
+            }
+        });
+        return { ...alt, score };
+    });
+
+    // Sort by score and return top matches (or all if no matches)
+    const matches = scored.filter(a => a.score > 0).sort((a, b) => b.score - a.score);
+    
+    if (matches.length === 0) {
+        // If no keyword matches, return variety from each category
+        return ALL_ALTERNATIVES.slice(0, 6);
+    }
+    
+    return matches.slice(0, 6);
 };
 
 export default function AlternativesScreen() {
-    const [selectedCategory, setSelectedCategory] = useState('drinks');
-    const [showScanner, setShowScanner] = useState(false);
-    const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
-    const [refreshing, setRefreshing] = useState(false);
-    const [swapsExpanded, setSwapsExpanded] = useState(true);
+    const navigation = useNavigation();
+    const [craving, setCraving] = useState('');
+    const [hasSearched, setHasSearched] = useState(false);
 
-    const activeCategory = categories.find(c => c.id === selectedCategory) || categories[0];
+    // Memoize alternatives based on craving
+    const alternatives = useMemo(() => {
+        if (!hasSearched && !craving.trim()) {
+            return ALL_ALTERNATIVES.slice(0, 6);
+        }
+        return findAlternatives(craving);
+    }, [craving, hasSearched]);
 
-    // Load scanned items
-    const loadScannedItems = async () => {
-        const items = await getScannedItems();
-        setScannedItems(items);
-    };
-
-    // Load on focus
-    useFocusEffect(
-        useCallback(() => {
-            loadScannedItems();
-        }, [])
-    );
-
-    // Handle refresh
-    const onRefresh = async () => {
-        setRefreshing(true);
-        await loadScannedItems();
-        setRefreshing(false);
-    };
-
-    // Handle new scan
-    const handleScanComplete = (item: ScannedItem) => {
-        setScannedItems(prev => [item, ...prev]);
-    };
-
-    // Handle delete
-    const handleDeleteItem = async (id: string) => {
-        await deleteScannedItem(id);
-        setScannedItems(prev => prev.filter(item => item.id !== id));
+    const handleCravingChange = (text: string) => {
+        setCraving(text);
+        if (text.length > 2) {
+            setHasSearched(true);
+        }
     };
 
     return (
-        <SwipeableTabView currentTab="Track">
-            <LooviBackground variant="coralBottom">
-                <SafeAreaView style={styles.container}>
-                    <ScrollView
-                        style={styles.scrollView}
-                        contentContainerStyle={styles.scrollContent}
-                        showsVerticalScrollIndicator={false}
-                        refreshControl={
-                            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                        }
+        <View style={styles.container}>
+            <LinearGradient
+                colors={[calmColors.darkerBg, calmColors.darkBg, calmColors.darkerBg]}
+                locations={[0, 0.5, 1]}
+                style={styles.gradient}
+            />
+
+            <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+                {/* Header */}
+                <View style={styles.header}>
+                    <TouchableOpacity
+                        onPress={() => navigation.goBack()}
+                        style={styles.backButton}
                     >
-                        {/* Header with Scan Button */}
-                        <View style={styles.header}>
-                            <View style={styles.headerText}>
-                                <Text style={styles.title}>Food & Scan</Text>
-                                <Text style={styles.subtitle}>Scan foods or find healthy swaps</Text>
+                        <Feather name="arrow-left" size={24} color={calmColors.text} />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Alternatives</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+
+                <KeyboardAvoidingView
+                    style={styles.keyboardAvoid}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                >
+                    <ScrollView 
+                        style={styles.scrollView}
+                        contentContainerStyle={styles.content}
+                        showsVerticalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
+                    >
+                        {/* Craving Input Section */}
+                        <View style={styles.inputSection}>
+                            <Text style={styles.inputLabel}>What are you craving?</Text>
+                            <View style={styles.inputContainer}>
+                                <Feather name="search" size={20} color={calmColors.textSecondary} style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="e.g., chocolate, ice cream, cookies..."
+                                    placeholderTextColor={calmColors.textSecondary}
+                                    value={craving}
+                                    onChangeText={handleCravingChange}
+                                    returnKeyType="search"
+                                    onSubmitEditing={() => {
+                                        Keyboard.dismiss();
+                                        setHasSearched(true);
+                                    }}
+                                />
+                                {craving.length > 0 && (
+                                    <TouchableOpacity 
+                                        onPress={() => { setCraving(''); setHasSearched(false); }}
+                                        style={styles.clearButton}
+                                    >
+                                        <Feather name="x" size={18} color={calmColors.textSecondary} />
+                                    </TouchableOpacity>
+                                )}
                             </View>
+                            <Text style={styles.inputHint}>
+                                Describe what you're craving and we'll suggest healthier options
+                            </Text>
                         </View>
 
-                        {/* Prominent Scan Button */}
-                        <TouchableOpacity
-                            style={styles.scanButton}
-                            onPress={() => setShowScanner(true)}
-                            activeOpacity={0.8}
-                        >
-                            <View style={styles.scanButtonContent}>
-                                <Text style={styles.scanEmoji}>📷</Text>
-                                <View style={styles.scanTextContainer}>
-                                    <Text style={styles.scanTitle}>Scan Food</Text>
-                                    <Text style={styles.scanSubtitle}>Check sugar content instantly</Text>
-                                </View>
-                                <Text style={styles.scanArrow}>→</Text>
-                            </View>
-                        </TouchableOpacity>
+                        {/* Title */}
+                        <View style={styles.titleSection}>
+                            <Text style={styles.title}>Healthy Alternatives</Text>
+                            <Text style={styles.subtitle}>
+                                {hasSearched && craving.trim() 
+                                    ? `Suggestions for "${craving}"`
+                                    : 'Satisfy your craving the smart way'
+                                }
+                            </Text>
+                        </View>
 
-                        {/* Recently Scanned */}
-                        {scannedItems.length > 0 && (
-                            <View style={styles.recentSection}>
-                                <View style={styles.sectionHeader}>
-                                    <Text style={styles.sectionTitle}>Recently Scanned</Text>
-                                    <Text style={styles.sectionCount}>{scannedItems.length} items</Text>
-                                </View>
-                                <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
-                                    style={styles.recentScroll}
+                        {/* Alternatives */}
+                        <View style={styles.alternativesContainer}>
+                            {alternatives.map((alt) => (
+                                <View
+                                    key={alt.id}
+                                    style={[styles.alternativeCard, { borderLeftColor: alt.category.color }]}
                                 >
-                                    {scannedItems.slice(0, 10).map((item) => (
-                                        <ScannedItemCard
-                                            key={item.id}
-                                            item={item}
-                                            compact
-                                        />
-                                    ))}
-                                </ScrollView>
-                            </View>
-                        )}
-
-                        {/* Empty State for Scans */}
-                        {scannedItems.length === 0 && (
-                            <GlassCard variant="light" padding="lg" style={styles.emptyCard}>
-                                <Text style={styles.emptyEmoji}>📸</Text>
-                                <Text style={styles.emptyTitle}>No scans yet</Text>
-                                <Text style={styles.emptyText}>
-                                    Scan your first food item to start tracking sugar content
-                                </Text>
-                            </GlassCard>
-                        )}
-
-                        {/* Food Swaps Section (Collapsible) */}
-                        <TouchableOpacity
-                            style={styles.swapsHeader}
-                            onPress={() => setSwapsExpanded(!swapsExpanded)}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={styles.swapsTitle}>Healthy Alternatives</Text>
-                            <Text style={styles.expandIcon}>{swapsExpanded ? '▼' : '▶'}</Text>
-                        </TouchableOpacity>
-
-                        {swapsExpanded && (
-                            <>
-                                {/* Category Tabs */}
-                                <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
-                                    style={styles.categoryScroll}
-                                >
-                                    <View style={styles.categoryRow}>
-                                        {categories.map((category) => (
-                                            <TouchableOpacity
-                                                key={category.id}
-                                                onPress={() => setSelectedCategory(category.id)}
-                                                activeOpacity={0.7}
-                                            >
-                                                <GlassCard
-                                                    variant="light"
-                                                    padding="sm"
-                                                    style={selectedCategory === category.id ? {
-                                                        ...styles.categoryChip,
-                                                        ...styles.categoryChipActive,
-                                                    } : styles.categoryChip}
-                                                >
-                                                    <Text style={styles.categoryEmoji}>{category.emoji}</Text>
-                                                    <Text style={[
-                                                        styles.categoryName,
-                                                        selectedCategory === category.id && styles.categoryNameActive,
-                                                    ]}>
-                                                        {category.name}
-                                                    </Text>
-                                                </GlassCard>
-                                            </TouchableOpacity>
-                                        ))}
+                                    <View style={styles.categoryBadge}>
+                                        <Feather name={alt.category.icon} size={12} color={alt.category.color} style={{ marginRight: 4 }} />
+                                        <Text style={[styles.categoryText, { color: alt.category.color }]}>
+                                            {alt.category.name}
+                                        </Text>
                                     </View>
-                                </ScrollView>
-
-                                {/* Alternatives List */}
-                                <View style={styles.alternativesList}>
-                                    {activeCategory.alternatives.map((alt) => (
-                                        <GlassCard key={alt.id} variant="light" padding="md" style={styles.alternativeCard}>
-                                            <View style={styles.alternativeRow}>
-                                                <Text style={styles.altEmoji}>{alt.emoji}</Text>
-                                                <View style={styles.altInfo}>
-                                                    <Text style={styles.altName}>{alt.name}</Text>
-                                                    <Text style={styles.altSwap}>Instead of: {alt.swapFor}</Text>
-                                                </View>
-                                                <View style={[styles.difficultyBadge, { backgroundColor: `${difficultyColors[alt.difficulty]}20` }]}>
-                                                    <Text style={[styles.difficultyText, { color: difficultyColors[alt.difficulty] }]}>
-                                                        {alt.difficulty}
-                                                    </Text>
-                                                </View>
-                                            </View>
-                                        </GlassCard>
-                                    ))}
+                                    <View style={styles.alternativeContent}>
+                                        <View style={[styles.alternativeIcon, { backgroundColor: `${alt.category.color}15` }]}>
+                                            <Feather name={alt.category.icon} size={24} color={alt.category.color} />
+                                        </View>
+                                        <View style={styles.alternativeInfo}>
+                                            <Text style={styles.alternativeTitle}>{alt.title}</Text>
+                                            <Text style={styles.alternativeDescription}>{alt.description}</Text>
+                                        </View>
+                                    </View>
                                 </View>
-                            </>
-                        )}
+                            ))}
+                        </View>
 
                         {/* Tip */}
-                        <GlassCard variant="light" padding="md" style={styles.tipCard}>
-                            <Text style={styles.tipTitle}>💡 Pro Tip</Text>
+                        <View style={styles.tipCard}>
+                            <Feather name="info" size={20} color={calmColors.accent} style={{ marginRight: spacing.md }} />
                             <Text style={styles.tipText}>
-                                Start with "Easy" swaps first. Small wins build momentum!
+                                These options provide natural sweetness without the blood sugar spike. The more specific your craving, the better the suggestions!
                             </Text>
-                        </GlassCard>
+                        </View>
                     </ScrollView>
-
-                    {/* Scanner Modal */}
-                    <FoodScannerModal
-                        visible={showScanner}
-                        onClose={() => setShowScanner(false)}
-                        onScanComplete={handleScanComplete}
-                    />
-                </SafeAreaView>
-            </LooviBackground>
-        </SwipeableTabView>
+                </KeyboardAvoidingView>
+            </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: calmColors.darkerBg,
+    },
+    gradient: {
+        ...StyleSheet.absoluteFillObject,
+    },
+    safeArea: {
+        flex: 1,
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.md,
+    },
+    backButton: {
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: calmColors.text,
+    },
+    keyboardAvoid: {
+        flex: 1,
     },
     scrollView: {
         flex: 1,
     },
-    scrollContent: {
-        paddingHorizontal: spacing.screen.horizontal,
-        paddingTop: spacing.lg,
+    content: {
+        paddingHorizontal: spacing.xl,
+        paddingTop: spacing.md,
         paddingBottom: spacing['3xl'],
     },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: spacing.lg,
+    // Input Section
+    inputSection: {
+        marginBottom: spacing.xl,
     },
-    headerText: {
+    inputLabel: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: calmColors.text,
+        marginBottom: spacing.sm,
+    },
+    inputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: calmColors.inputBg,
+        borderRadius: borderRadius.xl,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        paddingHorizontal: spacing.md,
+    },
+    inputIcon: {
+        marginRight: spacing.sm,
+    },
+    input: {
         flex: 1,
+        paddingVertical: spacing.md,
+        fontSize: 16,
+        color: calmColors.text,
+    },
+    clearButton: {
+        padding: spacing.xs,
+    },
+    inputHint: {
+        fontSize: 13,
+        color: calmColors.textSecondary,
+        marginTop: spacing.sm,
+        fontStyle: 'italic',
+    },
+    // Title
+    titleSection: {
+        marginBottom: spacing.xl,
     },
     title: {
-        fontSize: 28,
+        fontSize: 24,
         fontWeight: '700',
-        color: looviColors.text.primary,
-        letterSpacing: -0.5,
+        color: calmColors.text,
+        marginBottom: spacing.xs,
     },
     subtitle: {
         fontSize: 15,
         fontWeight: '400',
-        color: looviColors.text.secondary,
-        marginTop: spacing.xs,
+        color: calmColors.textSecondary,
+        lineHeight: 22,
     },
-    // Scan Button
-    scanButton: {
-        backgroundColor: looviColors.accent.primary,
-        borderRadius: 20,
+    // Alternatives
+    alternativesContainer: {
+        marginBottom: spacing.xl,
+    },
+    alternativeCard: {
+        backgroundColor: calmColors.cardBg,
+        borderRadius: borderRadius.xl,
         padding: spacing.lg,
-        marginBottom: spacing.xl,
-        shadowColor: looviColors.accent.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-        elevation: 5,
+        marginBottom: spacing.md,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderLeftWidth: 4,
     },
-    scanButtonContent: {
+    categoryBadge: {
         flexDirection: 'row',
         alignItems: 'center',
+        alignSelf: 'flex-start',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        marginBottom: spacing.sm,
     },
-    scanEmoji: {
-        fontSize: 36,
-        marginRight: spacing.md,
-    },
-    scanTextContainer: {
-        flex: 1,
-    },
-    scanTitle: {
-        fontSize: 18,
+    categoryText: {
+        fontSize: 10,
         fontWeight: '700',
-        color: '#FFFFFF',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
-    scanSubtitle: {
-        fontSize: 13,
-        fontWeight: '400',
-        color: 'rgba(255,255,255,0.8)',
-        marginTop: 2,
-    },
-    scanArrow: {
-        fontSize: 24,
-        color: '#FFFFFF',
-        fontWeight: '300',
-    },
-    // Recent Section
-    recentSection: {
-        marginBottom: spacing.xl,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: spacing.md,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: looviColors.text.primary,
-    },
-    sectionCount: {
-        fontSize: 13,
-        fontWeight: '500',
-        color: looviColors.text.tertiary,
-    },
-    recentScroll: {
-        marginHorizontal: -spacing.screen.horizontal,
-        paddingHorizontal: spacing.screen.horizontal,
-    },
-    // Empty State
-    emptyCard: {
-        alignItems: 'center',
-        marginBottom: spacing.xl,
-    },
-    emptyEmoji: {
-        fontSize: 48,
-        marginBottom: spacing.md,
-    },
-    emptyTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: looviColors.text.primary,
-        marginBottom: spacing.xs,
-    },
-    emptyText: {
-        fontSize: 14,
-        fontWeight: '400',
-        color: looviColors.text.secondary,
-        textAlign: 'center',
-    },
-    // Swaps Section
-    swapsHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: spacing.md,
-        marginBottom: spacing.md,
-    },
-    swapsTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: looviColors.text.primary,
-    },
-    expandIcon: {
-        fontSize: 12,
-        color: looviColors.text.tertiary,
-    },
-    // Category styles
-    categoryScroll: {
-        marginBottom: spacing.md,
-        marginHorizontal: -spacing.screen.horizontal,
-        paddingHorizontal: spacing.screen.horizontal,
-    },
-    categoryRow: {
-        flexDirection: 'row',
-        gap: spacing.sm,
-    },
-    categoryChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
-    },
-    categoryChipActive: {
-        backgroundColor: 'rgba(59, 130, 246, 0.15)',
-        borderColor: looviColors.accent.primary,
-    },
-    categoryEmoji: {
-        fontSize: 18,
-        marginRight: spacing.xs,
-    },
-    categoryName: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: looviColors.text.secondary,
-    },
-    categoryNameActive: {
-        color: looviColors.text.primary,
-        fontWeight: '600',
-    },
-    // Alternatives List
-    alternativesList: {
-        gap: spacing.sm,
-        marginBottom: spacing.xl,
-    },
-    alternativeCard: {},
-    alternativeRow: {
+    alternativeContent: {
         flexDirection: 'row',
         alignItems: 'center',
     },
-    altEmoji: {
-        fontSize: 32,
+    alternativeIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
         marginRight: spacing.md,
     },
-    altInfo: {
+    alternativeInfo: {
         flex: 1,
     },
-    altName: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: looviColors.text.primary,
+    alternativeTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: calmColors.text,
         marginBottom: 2,
     },
-    altSwap: {
-        fontSize: 12,
-        fontWeight: '400',
-        color: looviColors.text.tertiary,
+    alternativeDescription: {
+        fontSize: 13,
+        color: calmColors.textSecondary,
     },
-    difficultyBadge: {
-        paddingHorizontal: spacing.sm,
-        paddingVertical: 4,
-        borderRadius: 8,
-    },
-    difficultyText: {
-        fontSize: 11,
-        fontWeight: '600',
-    },
-    // Tip Card
     tipCard: {
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        borderColor: 'rgba(16, 185, 129, 0.3)',
-    },
-    tipTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: looviColors.text.primary,
-        marginBottom: spacing.xs,
+        flexDirection: 'row',
+        backgroundColor: calmColors.cardBg,
+        borderRadius: borderRadius.lg,
+        padding: spacing.lg,
+        borderWidth: 1,
+        borderColor: `${calmColors.accent}30`,
     },
     tipText: {
-        fontSize: 13,
-        fontWeight: '400',
-        color: looviColors.text.secondary,
+        flex: 1,
+        fontSize: 14,
+        color: calmColors.textSecondary,
+        lineHeight: 20,
     },
 });

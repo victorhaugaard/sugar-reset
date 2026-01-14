@@ -9,7 +9,7 @@
  * - Personal reasons reminder
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
     View,
     Text,
@@ -19,10 +19,19 @@ import {
     Modal,
     TextInput,
     Alert,
+    Animated,
+    PanResponder,
+    LayoutAnimation,
+    Platform,
+    UIManager,
+    FlatList,
+    Dimensions,
+    Image, // Added Image
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { spacing, borderRadius } from '../theme';
 import LooviBackground, { looviColors } from '../components/LooviBackground';
 import { GlassCard } from '../components/GlassCard';
@@ -41,6 +50,8 @@ import { WellnessTracker, WellnessData } from '../components/WellnessTracker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppIcon } from '../components/OnboardingIcon';
 import { getScannedItems, ScannedItem } from '../services/scannerService';
+import { SOSButton } from '../components/SOSButton';
+import { WellnessModal, WellnessLog } from '../components/WellnessModal';
 import {
     aggregateHealthData,
     WellnessMetrics as HealthWellnessMetrics,
@@ -55,6 +66,13 @@ function formatDuration(ms: number) {
     return { days, hours, minutes, seconds };
 }
 
+// Enable LayoutAnimation for Android
+if (Platform.OS === 'android') {
+    if (UIManager.setLayoutAnimationEnabledExperimental) {
+        UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+}
+
 export default function HomeScreen() {
     const [showPanicModal, setShowPanicModal] = useState(false);
     const [showCheckInModal, setShowCheckInModal] = useState(false);
@@ -67,23 +85,34 @@ export default function HomeScreen() {
     const [showEditReasonsModal, setShowEditReasonsModal] = useState(false);
     const [editSavingsGoal, setEditSavingsGoal] = useState('');
     const [editReasons, setEditReasons] = useState<string[]>([]);
+    const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
+
+    // Carousel logic
+    const flatListRef = useRef<FlatList>(null);
+    const isFocused = useIsFocused();
+    const scrollX = useRef(new Animated.Value(0)).current;
     const [showPledgeModal, setShowPledgeModal] = useState(false);
     const [hasPledgedToday, setHasPledgedToday] = useState(false);
     const [wellnessAverages, setWellnessAverages] = useState<WellnessData | null>(null);
     const [hasFoodLoggedToday, setHasFoodLoggedToday] = useState(false);
-    const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
     const [showJournalModal, setShowJournalModal] = useState(false);
     const [showTrackModal, setShowTrackModal] = useState(false);
     const [showFoodScannerModal, setShowFoodScannerModal] = useState(false);
     const [showWellnessModal, setShowWellnessModal] = useState(false);
     const [hasWellnessToday, setHasWellnessToday] = useState(false);
-    const [wellnessMood, setWellnessMood] = useState(3);
-    const [wellnessEnergy, setWellnessEnergy] = useState(3);
-    const [wellnessFocus, setWellnessFocus] = useState(3);
-    const [wellnessSleep, setWellnessSleep] = useState(7);
+    const [todayWellnessData, setTodayWellnessData] = useState<WellnessLog | null>(null);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
     const fallbackDateRef = useRef(new Date().toISOString()); // Stable fallback
     const navigation = useNavigation<any>(); // Type as any to allow navigation to new modal screens
+
+    // Pledge hold-down animation states
+    const [isPledgeHolding, setIsPledgeHolding] = useState(false);
+    const pledgeProgress = useRef(new Animated.Value(0)).current;
+    const pledgeScale = useRef(new Animated.Value(1)).current;
+    const pledgeShroudOpacity = useRef(new Animated.Value(0)).current;
+    const celebrationScale = useRef(new Animated.Value(0)).current;
+    const celebrationOpacity = useRef(new Animated.Value(0)).current;
+    const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
     const {
         onboardingData,
         isLoading,
@@ -149,6 +178,40 @@ export default function HomeScreen() {
         };
     }, [startDate]);
 
+    // Animate button changes
+    useEffect(() => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }, [hasPledgedToday, hasFoodLoggedToday, wellnessAverages]);
+
+    // Internal function to get target index
+    const getTargetIndex = useCallback(() => {
+        if (!hasPledgedToday) return 0;
+        const currentHour = new Date().getHours();
+        if (currentHour < 20) return 1;
+        return 2;
+    }, [hasPledgedToday]);
+
+    // Auto-scroll on pledge completion
+    useEffect(() => {
+        if (hasPledgedToday && flatListRef.current) {
+            // giving a small delay to ensure state update and layout
+            setTimeout(() => {
+                flatListRef.current?.scrollToIndex({ index: 1, animated: true });
+            }, 300);
+        }
+    }, [hasPledgedToday]);
+
+    // Re-center on Tab Focus
+    useEffect(() => {
+        if (isFocused && flatListRef.current) {
+            const targetIndex = getTargetIndex();
+            // Optional: delayed scroll to ensure layout is ready if switching tabs
+            setTimeout(() => {
+                flatListRef.current?.scrollToIndex({ index: targetIndex, animated: true });
+            }, 100);
+        }
+    }, [isFocused, getTargetIndex]);
+
     // Load 7-day wellness averages with real date-based filtering
     // Refresh when wellness modal is closed
     useEffect(() => {
@@ -165,8 +228,9 @@ export default function HomeScreen() {
 
                 // Check if today has wellness logged
                 const todayStr = new Date().toISOString().split('T')[0];
-                const hasTodayWellness = logs.some((log: any) => log.date === todayStr);
-                setHasWellnessToday(hasTodayWellness);
+                const todayLog = logs.find((log: any) => log.date === todayStr);
+                setHasWellnessToday(!!todayLog);
+                setTodayWellnessData(todayLog || null);
 
                 // Filter logs for last 7 days
                 const sevenDaysAgo = new Date();
@@ -236,15 +300,9 @@ export default function HomeScreen() {
         setShowPanicModal(true);
     };
 
-    const handleWellnessSave = async () => {
+    const handleWellnessSave = async (log: WellnessLog) => {
         try {
-            const log = {
-                date: new Date().toISOString().split('T')[0],
-                mood: wellnessMood,
-                energy: wellnessEnergy,
-                focus: wellnessFocus,
-                sleepHours: wellnessSleep,
-            };
+            // Save wellness metrics
             const stored = await AsyncStorage.getItem('wellness_logs');
             const logs = stored ? JSON.parse(stored) : [];
             const existingIndex = logs.findIndex((l: any) => l.date === log.date);
@@ -256,26 +314,25 @@ export default function HomeScreen() {
             }
 
             await AsyncStorage.setItem('wellness_logs', JSON.stringify(logs));
+
+            // Also save journal entry if thoughts are provided
+            if (log.thoughts && log.thoughts.trim()) {
+                const moodMap: Record<number, 'great' | 'good' | 'okay' | 'struggling' | 'difficult'> = {
+                    5: 'great',
+                    4: 'good',
+                    3: 'okay',
+                    2: 'struggling',
+                    1: 'difficult',
+                };
+                await addJournalEntry(new Date(), {
+                    mood: moodMap[log.mood] || 'okay',
+                    notes: log.thoughts.trim(),
+                });
+            }
+
             setShowWellnessModal(false);
         } catch (error) {
             console.error('Failed to save wellness log:', error);
-        }
-    };
-
-    const handleSleepSync = async () => {
-        try {
-            const sleepHours = await healthService.getTodaySleep();
-            if (sleepHours > 0) {
-                // Round to nearest 0.5
-                const rounded = Math.round(sleepHours * 2) / 2;
-                setWellnessSleep(rounded);
-                Alert.alert('Synced', `Updated sleep to ${rounded} hours based on Health data.`);
-            } else {
-                Alert.alert('No Data', 'No sleep data found for today.');
-            }
-        } catch (error) {
-            console.error(error);
-            Alert.alert('Error', 'Failed to sync sleep data.');
         }
     };
 
@@ -411,9 +468,9 @@ export default function HomeScreen() {
                         contentContainerStyle={styles.scrollContent}
                         showsVerticalScrollIndicator={false}
                     >
-                        {/* Main Timer Section - No card background */}
+                        {/* Growth Animation Section */}
                         <View style={styles.timerSection}>
-                            {/* Streak Badge - Above Number */}
+                            {/* Streak Badge - Above Animation */}
                             <View style={styles.streakBadge}>
                                 <View style={styles.streakRow}>
                                     <AppIcon emoji="🔥" size={16} />
@@ -421,35 +478,21 @@ export default function HomeScreen() {
                                 </View>
                             </View>
 
-                            <Text style={styles.daysNumber}>{daysSugarFree}</Text>
-                            <Text style={styles.daysLabel}>days</Text>
-
-                            {/* Live Timer */}
-                            <View style={styles.liveTimer}>
-                                <View style={styles.timerUnit}>
-                                    <Text style={styles.timerValue}>
-                                        {String(duration.hours).padStart(2, '0')}
-                                    </Text>
-                                    <Text style={styles.timerLabel}>hrs</Text>
-                                </View>
-                                <Text style={styles.timerSeparator}>:</Text>
-                                <View style={styles.timerUnit}>
-                                    <Text style={styles.timerValue}>
-                                        {String(duration.minutes).padStart(2, '0')}
-                                    </Text>
-                                    <Text style={styles.timerLabel}>min</Text>
-                                </View>
-                                <Text style={styles.timerSeparator}>:</Text>
-                                <View style={styles.timerUnit}>
-                                    <Text style={styles.timerValue}>
-                                        {String(duration.seconds).padStart(2, '0')}
-                                    </Text>
-                                    <Text style={styles.timerLabel}>sec</Text>
-                                </View>
+                            {/* Growth Animation instead of number */}
+                            <View style={styles.animationWrapper}>
+                                <Image
+                                    source={require('../public/sprout.png')}
+                                    style={{ width: 150, height: 150, marginBottom: spacing.sm, marginTop: spacing['2xl'] }}
+                                    resizeMode="contain"
+                                />
                             </View>
 
-                            {/* Separator Line */}
-                            <View style={styles.separatorLine} />
+                            {/* Live Timer - floating below animation with days */}
+                            <View style={styles.floatingTimer}>
+                                <Text style={styles.timerText}>
+                                    {daysSugarFree}d {String(duration.hours).padStart(2, '0')}h {String(duration.minutes).padStart(2, '0')}m {String(duration.seconds).padStart(2, '0')}s
+                                </Text>
+                            </View>
                         </View>
 
                         {/* Plan Progress Bar */}
@@ -459,68 +502,162 @@ export default function HomeScreen() {
                             endDate={new Date(startDate.getTime() + (planType === 'cold_turkey' ? 30 : 42) * 24 * 60 * 60 * 1000)}
                         />
 
-                        {/* Action Buttons: Pledge, Logging, Journal */}
-                        <View style={styles.actionRow}>
-                            {/* Pledge Button */}
-                            <TouchableOpacity
-                                activeOpacity={0.8}
-                                onPress={() => setShowPledgeModal(true)}
-                                style={styles.circleButtonContainer}
-                            >
-                                <View style={[
-                                    styles.circleButton,
-                                    {
-                                        backgroundColor: hasPledgedToday ? 'rgba(34, 197, 94, 0.85)' : 'rgba(217, 123, 102, 0.85)',
-                                        shadowColor: hasPledgedToday ? '#22C55E' : looviColors.coralOrange,
-                                    }
-                                ]}>
-                                    <AppIcon emoji={hasPledgedToday ? "✅" : "🤝"} size={26} color="#FFFFFF" />
-                                </View>
-                                <Text style={[styles.circleButtonLabel, hasPledgedToday && { color: '#22C55E' }]}>
-                                    {hasPledgedToday ? 'Pledged' : 'Pledge'}
-                                </Text>
-                            </TouchableOpacity>
+                        {/* Action Buttons: Pledge, Logging, Journal - Daily Journey */}
+                        <View style={styles.dailyFlowContainer}>
+                            {/* Carousel of Daily Actions */}
+                            <Animated.FlatList
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                snapToAlignment="start"
+                                snapToInterval={100} // Reduced to 100 for tighter spacing
+                                decelerationRate="fast"
+                                onScroll={Animated.event(
+                                    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+                                    { useNativeDriver: true }
+                                )}
+                                ref={flatListRef}
+                                disableIntervalMomentum={true}
+                                getItemLayout={(data, index) => (
+                                    { length: 100, offset: 100 * index, index }
+                                )}
+                                initialScrollIndex={getTargetIndex()}
+                                onScrollToIndexFailed={(info) => {
+                                    const wait = new Promise(resolve => setTimeout(resolve, 500));
+                                    wait.then(() => {
+                                        flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
+                                    });
+                                }}
+                                contentContainerStyle={{
+                                    paddingHorizontal: (Dimensions.get('window').width - 100) / 2,
+                                    alignItems: 'center',
+                                    paddingTop: spacing.md,
+                                }}
+                                data={[
+                                    { id: 'pledge', type: 'pledge' },
+                                    { id: 'track', type: 'track' },
+                                    { id: 'journal', type: 'journal' },
+                                ]}
+                                keyExtractor={(item) => item.id}
+                                renderItem={({ item, index }) => {
+                                    const isPledged = hasPledgedToday;
+                                    const isLogged = hasFoodLoggedToday;
+                                    const isJournaled = !!wellnessAverages;
 
-                            {/* Track Button - Quick Log access */}
-                            <TouchableOpacity
-                                activeOpacity={0.8}
-                                onPress={() => setShowTrackModal(true)}
-                                style={styles.circleButtonContainer}
-                            >
-                                <View style={[
-                                    styles.circleButton,
-                                    {
-                                        backgroundColor: 'rgba(245, 158, 11, 0.85)',
-                                        shadowColor: '#F59E0B',
-                                    }
-                                ]}>
-                                    <AppIcon emoji="📊" size={26} color="#FFFFFF" />
-                                </View>
-                                <Text style={styles.circleButtonLabel}>Track</Text>
-                            </TouchableOpacity>
+                                    let isCompleted = false;
+                                    let label = "";
+                                    let subLabel = "";
+                                    let iconName: any = "";
+                                    let iconEmoji = "";
+                                    let bg = "";
+                                    let shadow = "";
+                                    let onPress: () => void = () => { };
+                                    let disabled = false;
 
-                            {/* Journal Button */}
-                            <TouchableOpacity
-                                activeOpacity={0.8}
-                                onPress={() => setShowJournalModal(true)}
-                                style={styles.circleButtonContainer}
-                            >
-                                <View style={[
-                                    styles.circleButton,
-                                    {
-                                        backgroundColor: 'rgba(139, 92, 246, 0.85)',
-                                        shadowColor: '#8B5CF6',
+                                    if (item.type === 'pledge') {
+                                        isCompleted = isPledged;
+                                        label = "Pledge";
+                                        subLabel = "Morning";
+                                        iconName = isPledged ? "checkmark" : "hand-left";
+                                        bg = isPledged ? 'rgba(127, 176, 105, 0.4)' : 'rgba(217, 123, 102, 0.9)';
+                                        shadow = isPledged ? '#7FB069' : looviColors.coralOrange;
+                                        onPress = () => setShowPledgeModal(true);
+                                        disabled = isPledged;
+                                    } else if (item.type === 'track') {
+                                        isCompleted = isLogged;
+                                        label = "Track";
+                                        subLabel = "Day";
+                                        iconName = "restaurant";
+                                        bg = 'rgba(232, 168, 124, 0.9)';
+                                        shadow = looviColors.coralOrange;
+                                        onPress = () => isPledged && setShowFoodScannerModal(true);
+                                        disabled = !isPledged;
+                                    } else if (item.type === 'journal') {
+                                        isCompleted = isJournaled;
+                                        label = "Journal";
+                                        subLabel = isJournaled ? "Completed" : "Evening";
+                                        iconEmoji = isJournaled ? "✅" : "📓";
+                                        // When done: Green background
+                                        bg = isJournaled ? looviColors.accent.success : 'rgba(127, 176, 105, 0.9)';
+                                        shadow = '#7FB069';
+                                        onPress = () => isLogged && setShowWellnessModal(true);
+                                        disabled = !isLogged;
                                     }
-                                ]}>
-                                    <AppIcon emoji="📓" size={26} color="#FFFFFF" />
-                                </View>
-                                <Text style={styles.circleButtonLabel}>Journal</Text>
-                            </TouchableOpacity>
+
+                                    // Animations
+                                    const ITEM_SIZE = 100;
+                                    const inputRange = [
+                                        (index - 1) * ITEM_SIZE,
+                                        index * ITEM_SIZE,
+                                        (index + 1) * ITEM_SIZE,
+                                    ];
+
+                                    const scale = scrollX.interpolate({
+                                        inputRange,
+                                        outputRange: [0.6, 1, 0.6],
+                                        extrapolate: 'clamp',
+                                    });
+
+                                    const opacity = scrollX.interpolate({
+                                        inputRange,
+                                        outputRange: [0.4, 1, 0.4], // More dim (0.4)
+                                        extrapolate: 'clamp',
+                                    });
+
+                                    return (
+                                        <View style={[styles.carouselItem, { width: 100 }]}>
+                                            <Animated.View style={{ transform: [{ scale }], opacity }}>
+                                                <TouchableOpacity
+                                                    activeOpacity={0.8}
+                                                    onPress={onPress}
+                                                    disabled={disabled && item.type !== 'track'}
+                                                    style={styles.largeCircleButtonContainer}
+                                                >
+                                                    <View style={[
+                                                        styles.largeCircleButton,
+                                                        {
+                                                            backgroundColor: bg,
+                                                            shadowColor: shadow,
+                                                            borderColor: 'rgba(255, 255, 255, 0.9)',
+                                                            borderWidth: 4,
+                                                        }
+                                                    ]}>
+                                                        {iconEmoji ? (
+                                                            <AppIcon
+                                                                emoji={iconEmoji}
+                                                                size={32}
+                                                                color={isJournaled && item.type === 'journal' ? '#FFFFFF' : "#FFFFFF"}
+                                                            />
+                                                        ) : (
+                                                            <Ionicons
+                                                                name={iconName}
+                                                                size={30}
+                                                                color="#FFFFFF"
+                                                            />
+                                                        )}
+                                                    </View>
+                                                    <Text style={styles.largeCircleButtonLabel}>{label}</Text>
+                                                    <Text style={styles.largeFlowTimeLabel}>{subLabel}</Text>
+                                                </TouchableOpacity>
+                                            </Animated.View>
+                                        </View>
+                                    );
+                                }}
+                                getItemLayout={(data, index) => (
+                                    { length: 100, offset: 100 * index, index }
+                                )}
+                                initialScrollIndex={(() => {
+                                    if (!hasPledgedToday) return 0;
+                                    const currentHour = new Date().getHours();
+                                    if (currentHour < 20) return 1;
+                                    return 2;
+                                })()}
+                            />
                         </View>
 
+                        {/* Your Next Task Section */}
+                        <Text style={styles.sectionTitle}>Your next task</Text>
                         {/* Smart Call-to-Action */}
                         <TouchableOpacity
-                            style={styles.ctaContainer}
                             activeOpacity={0.85}
                             onPress={() => {
                                 // Navigate based on what's pending
@@ -531,37 +668,42 @@ export default function HomeScreen() {
                                 } else if (!hasFoodLoggedToday) {
                                     setShowFoodScannerModal(true);
                                 } else {
-                                    setShowJournalModal(true);
+                                    setShowWellnessModal(true);
                                 }
                             }}
                         >
-                            <View style={styles.ctaContent}>
-                                <View style={styles.ctaIconContainer}>
-                                    <Feather
-                                        name={
-                                            !hasPledgedToday ? 'target' :
-                                                !wellnessAverages ? 'heart' :
-                                                    !hasFoodLoggedToday ? 'camera' : 'edit-3'
-                                        }
-                                        size={20}
-                                        color={looviColors.accent.primary}
-                                    />
+                            <GlassCard variant="light" padding="md" style={styles.ctaContainerGlass}>
+                                <View style={styles.ctaContent}>
+                                    <View style={styles.ctaIconContainer}>
+                                        <Feather
+                                            name={
+                                                !hasPledgedToday ? 'sun' :
+                                                    !hasFoodLoggedToday ? 'camera' :
+                                                        !wellnessAverages ? 'book' : 'check-circle'
+                                            }
+                                            size={20}
+                                            color={looviColors.accent.primary}
+                                        />
+                                    </View>
+                                    <View style={styles.ctaTextContainer}>
+                                        <Text style={styles.ctaTitle}>
+                                            {!hasPledgedToday ? 'Morning Check-In' :
+                                                !hasFoodLoggedToday ? 'Log Your Meal' :
+                                                    !wellnessAverages ? 'Evening Reflection' : 'All Done!'}
+                                        </Text>
+                                        <Text style={styles.ctaSubtitle}>
+                                            {!hasPledgedToday ? 'Start your day with intention' :
+                                                !hasFoodLoggedToday ? 'Take a photo of your food' :
+                                                    !wellnessAverages ? 'Rate your day & growth' : 'Great job today!'}
+                                        </Text>
+                                    </View>
+                                    <Feather name="chevron-right" size={20} color={looviColors.text.tertiary} />
                                 </View>
-                                <View style={styles.ctaTextContainer}>
-                                    <Text style={styles.ctaTitle}>
-                                        {!hasPledgedToday ? 'Make Your Daily Pledge' :
-                                            !wellnessAverages ? 'Log Your Wellness' :
-                                                !hasFoodLoggedToday ? 'Log Your First Meal' : 'Reflect on Your Day'}
-                                    </Text>
-                                    <Text style={styles.ctaSubtitle}>
-                                        {!hasPledgedToday ? 'Start your day with intention' :
-                                            !wellnessAverages ? 'Track mood, energy, focus & sleep' :
-                                                !hasFoodLoggedToday ? 'Scan or add what you ate' : 'Write about your progress'}
-                                    </Text>
-                                </View>
-                                <Feather name="chevron-right" size={20} color={looviColors.text.muted} />
-                            </View>
+                            </GlassCard>
                         </TouchableOpacity>
+
+                        {/* Spacer */}
+                        <View style={{ height: spacing.lg }} />
 
                         {/* 7-Day Wellness Averages */}
                         {wellnessAverages ? (
@@ -586,6 +728,7 @@ export default function HomeScreen() {
 
 
                     </ScrollView>
+
 
                     {/* Panic Modal */}
                     <Modal
@@ -773,52 +916,196 @@ export default function HomeScreen() {
 
 
 
-                    {/* Pledge Modal */}
+                    {/* Pledge Modal - Interactive Hold-Down */}
                     <Modal
                         visible={showPledgeModal}
                         transparent
                         animationType="fade"
                         onRequestClose={() => setShowPledgeModal(false)}
                     >
-                        <TouchableOpacity
-                            style={styles.modalOverlay}
-                            activeOpacity={1}
-                            onPress={() => setShowPledgeModal(false)}
-                        >
-                            <TouchableOpacity activeOpacity={1} style={styles.pledgeModalContent}>
-                                <View style={styles.pledgeEmojiContainer}>
-                                    <AppIcon emoji="🤝" size={48} />
-                                </View>
-                                <Text style={styles.pledgeTitle}>Make Your Pledge</Text>
-                                <Text style={styles.pledgeDescription}>
-                                    Today, I commit to being sugar-free. One day at a time, I'm building a healthier future for myself.
-                                </Text>
+                        <View style={styles.modalOverlay}>
+                            {/* Animated shroud that closes in while holding */}
+                            <Animated.View
+                                style={[
+                                    styles.pledgeShroud,
+                                    {
+                                        opacity: pledgeShroudOpacity,
+                                        transform: [{
+                                            scale: pledgeShroudOpacity.interpolate({
+                                                inputRange: [0, 1],
+                                                outputRange: [1.5, 1],
+                                            })
+                                        }]
+                                    }
+                                ]}
+                            />
 
-                                {hasPledgedToday ? (
-                                    <View style={styles.pledgeCompletedContainer}>
-                                        <AppIcon emoji="✅" size={24} />
-                                        <Text style={styles.pledgeCompletedText}>You've made your pledge today!</Text>
-                                    </View>
-                                ) : (
-                                    <TouchableOpacity
-                                        style={styles.pledgeButton}
-                                        onPress={() => {
-                                            setHasPledgedToday(true);
-                                            setTimeout(() => setShowPledgeModal(false), 1000);
-                                        }}
-                                    >
-                                        <Text style={styles.pledgeButtonText}>I Pledge to Stay Sugar-Free</Text>
-                                    </TouchableOpacity>
-                                )}
-
-                                <TouchableOpacity
-                                    style={styles.pledgeSecondaryButton}
-                                    onPress={() => navigation.navigate('Reasons')}
-                                >
-                                    <Text style={styles.pledgeSecondaryText}>View My Reasons</Text>
-                                </TouchableOpacity>
+                            {/* Close button */}
+                            <TouchableOpacity
+                                style={styles.pledgeCloseButton}
+                                onPress={() => setShowPledgeModal(false)}
+                                hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+                            >
+                                <Feather name="x" size={24} color="rgba(255, 255, 255, 0.7)" />
                             </TouchableOpacity>
-                        </TouchableOpacity>
+
+                            <View style={styles.pledgeModalContent}>
+                                {hasPledgedToday ? (
+                                    <>
+
+                                        <View style={styles.pledgeEmojiContainer}>
+                                            <AppIcon emoji="✅" size={64} />
+                                        </View>
+                                        <Text style={styles.pledgeCompletedText}>Pledge Complete!</Text>
+                                        <Text style={styles.pledgeCompletedSubtext}>Have a great day 🌅</Text>
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* Morning indicator */}
+                                        <View style={styles.morningBadge}>
+                                            <AppIcon emoji="☀️" size={16} />
+                                            <Text style={styles.morningBadgeText}>Morning Ritual</Text>
+                                        </View>
+
+                                        <View style={styles.pledgeEmojiContainer}>
+                                            <AppIcon emoji="✋" size={80} />
+                                        </View>
+
+                                        <Text style={styles.pledgeInstruction}>Hold to pledge</Text>
+
+                                        {/* Hold-down button */}
+                                        <View
+                                            {...PanResponder.create({
+                                                onStartShouldSetPanResponder: () => true,
+                                                onPanResponderGrant: () => {
+                                                    setIsPledgeHolding(true);
+                                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+                                                    // Animate scale
+                                                    Animated.spring(pledgeScale, {
+                                                        toValue: 0.95,
+                                                        useNativeDriver: true,
+                                                    }).start();
+
+                                                    // Animate shroud
+                                                    Animated.timing(pledgeShroudOpacity, {
+                                                        toValue: 1,
+                                                        duration: 1200,
+                                                        useNativeDriver: true,
+                                                    }).start();
+
+                                                    // Progress animation
+                                                    Animated.timing(pledgeProgress, {
+                                                        toValue: 1,
+                                                        duration: 1200,
+                                                        useNativeDriver: false,
+                                                    }).start();
+
+                                                    // Hold timer
+                                                    holdTimerRef.current = setTimeout(() => {
+                                                        // Success haptic
+                                                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+                                                        // Celebration animation
+                                                        Animated.parallel([
+                                                            Animated.spring(celebrationScale, {
+                                                                toValue: 1,
+                                                                friction: 6,
+                                                                tension: 40,
+                                                                useNativeDriver: true,
+                                                            }),
+                                                            Animated.timing(celebrationOpacity, {
+                                                                toValue: 1,
+                                                                duration: 300,
+                                                                useNativeDriver: true,
+                                                            }),
+                                                        ]).start();
+
+                                                        // Mark as pledged
+                                                        setHasPledgedToday(true);
+
+                                                        // Fade out celebration and close
+                                                        setTimeout(() => {
+                                                            Animated.timing(celebrationOpacity, {
+                                                                toValue: 0,
+                                                                duration: 500,
+                                                                useNativeDriver: true,
+                                                            }).start();
+
+                                                            setTimeout(() => {
+                                                                setShowPledgeModal(false);
+                                                                // Reset animations
+                                                                pledgeProgress.setValue(0);
+                                                                pledgeScale.setValue(1);
+                                                                pledgeShroudOpacity.setValue(0);
+                                                                celebrationScale.setValue(0);
+                                                                celebrationOpacity.setValue(0);
+                                                            }, 500);
+                                                        }, 1500);
+                                                    }, 1200);
+                                                },
+                                                onPanResponderRelease: () => {
+                                                    if (holdTimerRef.current) {
+                                                        clearTimeout(holdTimerRef.current);
+                                                    }
+
+                                                    if (isPledgeHolding) {
+                                                        setIsPledgeHolding(false);
+                                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+                                                        // Reset animations
+                                                        Animated.parallel([
+                                                            Animated.spring(pledgeScale, {
+                                                                toValue: 1,
+                                                                useNativeDriver: true,
+                                                            }),
+                                                            Animated.timing(pledgeShroudOpacity, {
+                                                                toValue: 0,
+                                                                duration: 300,
+                                                                useNativeDriver: true,
+                                                            }),
+                                                            Animated.timing(pledgeProgress, {
+                                                                toValue: 0,
+                                                                duration: 300,
+                                                                useNativeDriver: false,
+                                                            }),
+                                                        ]).start();
+                                                    }
+                                                },
+                                            }).panHandlers}
+                                        >
+                                            <Animated.View
+                                                style={[
+                                                    styles.pledgeHoldButton,
+                                                    {
+                                                        transform: [{ scale: pledgeScale }]
+                                                    }
+                                                ]}
+                                            >
+                                                {/* Progress ring */}
+                                                <Animated.View
+                                                    style={[
+                                                        styles.pledgeProgressRing,
+                                                        {
+                                                            opacity: pledgeProgress,
+                                                            transform: [{
+                                                                scale: pledgeProgress.interpolate({
+                                                                    inputRange: [0, 1],
+                                                                    outputRange: [0.8, 1],
+                                                                })
+                                                            }]
+                                                        }
+                                                    ]}
+                                                />
+                                                <View style={styles.pledgeButtonInner}>
+                                                    <AppIcon emoji="✋" size={40} color="#FFFFFF" />
+                                                </View>
+                                            </Animated.View>
+                                        </View>
+                                    </>
+                                )}
+                            </View>
+                        </View>
                     </Modal>
 
                     {/* Journal Entry Modal */}
@@ -826,7 +1113,47 @@ export default function HomeScreen() {
                         visible={showJournalModal}
                         onClose={() => setShowJournalModal(false)}
                         onSave={async (entry) => {
-                            await addJournalEntry(new Date(), entry);
+                            // Save wellness data if provided
+                            if (entry.mood !== undefined && entry.energy !== undefined &&
+                                entry.focus !== undefined && entry.sleep !== undefined) {
+                                const todayStr = new Date().toISOString().split('T')[0];
+                                const stored = await AsyncStorage.getItem('wellness_logs');
+                                const logs = stored ? JSON.parse(stored) : [];
+
+                                // Remove existing entry for today if any
+                                const filteredLogs = logs.filter((log: any) => log.date !== todayStr);
+
+                                // Add new entry
+                                filteredLogs.push({
+                                    date: todayStr,
+                                    mood: entry.mood,
+                                    energy: entry.energy,
+                                    focus: entry.focus,
+                                    sleepHours: entry.sleep,
+                                });
+
+                                await AsyncStorage.setItem('wellness_logs', JSON.stringify(filteredLogs));
+                            }
+
+                            // Only save journal entry if there are actual notes
+                            if (entry.notes && entry.notes.trim().length > 0) {
+                                // Convert mood number to mood string
+                                let moodString: 'great' | 'good' | 'okay' | 'struggling' | 'difficult' = 'okay';
+                                if (entry.mood) {
+                                    if (entry.mood >= 5) moodString = 'great';
+                                    else if (entry.mood >= 4) moodString = 'good';
+                                    else if (entry.mood >= 3) moodString = 'okay';
+                                    else if (entry.mood >= 2) moodString = 'struggling';
+                                    else moodString = 'difficult';
+                                }
+
+                                await addJournalEntry(new Date(), {
+                                    mood: moodString,
+                                    notes: entry.notes.trim(),
+                                    whatTriggered: entry.whatTriggered,
+                                });
+                            }
+
                             setShowJournalModal(false);
                         }}
                     />
@@ -911,154 +1238,14 @@ export default function HomeScreen() {
                         }}
                     />
 
-                    {/* Wellness Modal */}
-                    <Modal
+                    {/* Wellness Modal - Full-screen shared component */}
+                    <WellnessModal
                         visible={showWellnessModal}
-                        transparent
-                        animationType="fade"
-                        onRequestClose={() => setShowWellnessModal(false)}
-                    >
-                        <View style={styles.modalOverlay}>
-                            <View style={styles.wellnessModalContent}>
-                                <TouchableOpacity
-                                    style={styles.wellnessCloseButton}
-                                    onPress={() => setShowWellnessModal(false)}
-                                >
-                                    <Text style={styles.wellnessCloseText}>✕</Text>
-                                </TouchableOpacity>
-
-                                <Text style={styles.wellnessTitle}>How are you feeling?</Text>
-                                <Text style={styles.wellnessSubtitle}>Rate your wellness today</Text>
-
-                                <ScrollView showsVerticalScrollIndicator={false} style={styles.wellnessScrollView}>
-                                    {/* Mood */}
-                                    <View style={styles.wellnessScaleContainer}>
-                                        <View style={styles.wellnessScaleHeader}>
-                                            <AppIcon emoji="😊" size={20} />
-                                            <Text style={styles.wellnessScaleLabel}>Mood</Text>
-                                        </View>
-                                        <View style={styles.wellnessScaleButtons}>
-                                            {[1, 2, 3, 4, 5].map(n => (
-                                                <TouchableOpacity
-                                                    key={n}
-                                                    style={[
-                                                        styles.wellnessScaleButton,
-                                                        wellnessMood === n && styles.wellnessScaleButtonActive
-                                                    ]}
-                                                    onPress={() => setWellnessMood(n)}
-                                                >
-                                                    <Text style={[
-                                                        styles.wellnessScaleButtonText,
-                                                        wellnessMood === n && styles.wellnessScaleButtonTextActive
-                                                    ]}>{n}</Text>
-                                                </TouchableOpacity>
-                                            ))}
-                                        </View>
-                                    </View>
-
-                                    {/* Energy */}
-                                    <View style={styles.wellnessScaleContainer}>
-                                        <View style={styles.wellnessScaleHeader}>
-                                            <AppIcon emoji="⚡" size={20} />
-                                            <Text style={styles.wellnessScaleLabel}>Energy</Text>
-                                        </View>
-                                        <View style={styles.wellnessScaleButtons}>
-                                            {[1, 2, 3, 4, 5].map(n => (
-                                                <TouchableOpacity
-                                                    key={n}
-                                                    style={[
-                                                        styles.wellnessScaleButton,
-                                                        wellnessEnergy === n && styles.wellnessScaleButtonActive
-                                                    ]}
-                                                    onPress={() => setWellnessEnergy(n)}
-                                                >
-                                                    <Text style={[
-                                                        styles.wellnessScaleButtonText,
-                                                        wellnessEnergy === n && styles.wellnessScaleButtonTextActive
-                                                    ]}>{n}</Text>
-                                                </TouchableOpacity>
-                                            ))}
-                                        </View>
-                                    </View>
-
-                                    {/* Focus */}
-                                    <View style={styles.wellnessScaleContainer}>
-                                        <View style={styles.wellnessScaleHeader}>
-                                            <AppIcon emoji="🧠" size={20} />
-                                            <Text style={styles.wellnessScaleLabel}>Focus</Text>
-                                        </View>
-                                        <View style={styles.wellnessScaleButtons}>
-                                            {[1, 2, 3, 4, 5].map(n => (
-                                                <TouchableOpacity
-                                                    key={n}
-                                                    style={[
-                                                        styles.wellnessScaleButton,
-                                                        wellnessFocus === n && styles.wellnessScaleButtonActive
-                                                    ]}
-                                                    onPress={() => setWellnessFocus(n)}
-                                                >
-                                                    <Text style={[
-                                                        styles.wellnessScaleButtonText,
-                                                        wellnessFocus === n && styles.wellnessScaleButtonTextActive
-                                                    ]}>{n}</Text>
-                                                </TouchableOpacity>
-                                            ))}
-                                        </View>
-                                    </View>
-
-                                    {/* Sleep */}
-                                    <View style={styles.wellnessScaleContainer}>
-                                        <View style={styles.wellnessScaleHeader}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                                <AppIcon emoji="😴" size={20} />
-                                                <Text style={styles.wellnessScaleLabel}>Hours of Sleep</Text>
-                                            </View>
-                                            <TouchableOpacity
-                                                onPress={handleSleepSync}
-                                                style={{
-                                                    marginLeft: 'auto',
-                                                    paddingHorizontal: 8,
-                                                    paddingVertical: 4,
-                                                    backgroundColor: 'rgba(0,0,0,0.05)',
-                                                    borderRadius: 12,
-                                                    flexDirection: 'row',
-                                                    alignItems: 'center',
-                                                    gap: 4
-                                                }}
-                                            >
-                                                <Feather name="refresh-cw" size={12} color={looviColors.accent.primary} />
-                                                <Text style={{ fontSize: 10, color: looviColors.accent.primary, fontWeight: '600' }}>Sync Health</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                        <View style={styles.wellnessSleepButtons}>
-                                            {[4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10, 10.5, 11].map(h => (
-                                                <TouchableOpacity
-                                                    key={h}
-                                                    style={[
-                                                        styles.wellnessSleepButton,
-                                                        wellnessSleep === h && styles.wellnessSleepButtonActive
-                                                    ]}
-                                                    onPress={() => setWellnessSleep(h)}
-                                                >
-                                                    <Text style={[
-                                                        styles.wellnessSleepButtonText,
-                                                        wellnessSleep === h && styles.wellnessSleepButtonTextActive
-                                                    ]}>{h % 1 === 0 ? `${h}h` : `${h}`}</Text>
-                                                </TouchableOpacity>
-                                            ))}
-                                        </View>
-                                    </View>
-                                </ScrollView>
-
-                                <TouchableOpacity
-                                    style={styles.wellnessSaveButton}
-                                    onPress={handleWellnessSave}
-                                >
-                                    <Text style={styles.wellnessSaveButtonText}>Save How I'm Feeling</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </Modal>
+                        onClose={() => setShowWellnessModal(false)}
+                        onSave={handleWellnessSave}
+                        selectedDate={new Date().toISOString().split('T')[0]}
+                        existingData={todayWellnessData}
+                    />
                 </SafeAreaView>
             </LooviBackground>
         </SwipeableTabView>
@@ -1076,6 +1263,15 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.screen.horizontal,
         paddingTop: spacing.lg,
         paddingBottom: spacing['3xl'],
+    },
+    sectionTitle: {
+        fontSize: 10,
+        fontWeight: '600',
+        color: looviColors.text.tertiary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginTop: spacing.lg,
+        marginBottom: spacing.sm,
     },
     header: {
         flexDirection: 'row',
@@ -1100,48 +1296,17 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: spacing.lg,
     },
-    daysNumber: {
-        fontSize: 56,
-        fontWeight: '800',
-        color: looviColors.text.primary,
-        letterSpacing: -2,
-    },
-    daysLabel: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: looviColors.text.secondary,
+    floatingTimer: {
         marginTop: -spacing.xs,
     },
-    liveTimer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: spacing.md,
-        backgroundColor: 'rgba(0, 0, 0, 0.05)',
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
-        borderRadius: borderRadius.lg,
-    },
-    timerUnit: {
-        alignItems: 'center',
-        minWidth: 50,
-    },
-    timerValue: {
+    timerText: {
         fontSize: 18,
         fontWeight: '700',
-        color: looviColors.text.primary,
-        fontVariant: ['tabular-nums'],
-    },
-    timerLabel: {
-        fontSize: 10,
-        fontWeight: '500',
-        color: looviColors.text.tertiary,
-        textTransform: 'uppercase',
-    },
-    timerSeparator: {
-        fontSize: 18,
-        fontWeight: '300',
-        color: looviColors.text.tertiary,
-        marginHorizontal: 2,
+        color: looviColors.accent.primary,
+        letterSpacing: 0.5,
+        textShadowColor: 'rgba(217, 123, 102, 0.3)',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 4,
     },
     timerSection: {
         alignItems: 'center',
@@ -1153,8 +1318,12 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.sm,
         paddingVertical: 4,
         borderRadius: 16,
-        marginBottom: spacing.md,
+        marginBottom: spacing.xs,
         alignSelf: 'center',
+    },
+    animationWrapper: {
+        marginTop: -spacing.sm,
+        marginBottom: 0,
     },
     streakText: {
         fontSize: 12,
@@ -1172,10 +1341,83 @@ const styles = StyleSheet.create({
         marginTop: spacing.lg,
     },
     // Action Row Styles
+    // Daily Flow Container
+    dailyFlowContainer: {
+        position: 'relative',
+        marginBottom: spacing.lg,
+        marginTop: spacing.lg,
+        marginHorizontal: -spacing.screen.horizontal, // Break out of parent padding for full-width carousel
+    },
+    flowLineContainer: {
+        position: 'absolute',
+        top: 30, // Align with center of buttons (60px button / 2)
+        left: '20%',
+        right: '20%',
+        height: 2,
+        zIndex: 0,
+    },
+    flowLine: {
+        position: 'absolute',
+        top: 0.5,
+        left: 0,
+        right: 0,
+        height: 1,
+        backgroundColor: 'rgba(217, 123, 102, 0.2)',
+    },
+    flowDot: {
+        position: 'absolute',
+        top: -1.5,
+        width: 4,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: 'rgba(217, 123, 102, 0.4)',
+    },
+    flowButtonWrapper: {
+        flex: 1,
+        alignItems: 'center',
+        zIndex: 2,
+    },
     actionRow: {
         flexDirection: 'row',
-        gap: spacing.md,
-        marginBottom: spacing.lg,
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        gap: spacing.sm,
+        position: 'relative',
+        zIndex: 1,
+    },
+    stepNumberBadge: {
+        position: 'absolute',
+        top: -8,
+        left: '50%',
+        marginLeft: -12,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: looviColors.accent.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10,
+        borderWidth: 2,
+        borderColor: '#FFFFFF',
+    },
+    stepNumber: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
+    journeyConnectorContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 45,
+    },
+    journeyConnector: {
+        width: 25,
+        height: 3,
+        backgroundColor: 'rgba(217, 123, 102, 0.2)',
+        borderRadius: 2,
+    },
+    journeyConnectorActive: {
+        backgroundColor: looviColors.accent.success,
     },
     actionButton: {
         flex: 1,
@@ -1306,7 +1548,7 @@ const styles = StyleSheet.create({
     reasonsSection: {
         marginBottom: spacing.xl,
     },
-    sectionTitle: {
+    reasonsSectionTitle: {
         fontSize: 18,
         fontWeight: '600',
         color: looviColors.text.primary,
@@ -1343,7 +1585,7 @@ const styles = StyleSheet.create({
     // Modal styles
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(0, 0, 0, 0.75)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: spacing.screen.horizontal,
@@ -1795,13 +2037,6 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#FFFFFF',
     },
-    // Action Button Row (Pledge, Track, Journal)
-    actionRow: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'flex-start',
-        marginVertical: spacing.md,
-    },
     // Circular Action Buttons (Pledge, Track, Journal) - SOS-like styling
     circleButtonContainer: {
         alignItems: 'center',
@@ -1829,6 +2064,14 @@ const styles = StyleSheet.create({
         color: looviColors.text.primary,
         textAlign: 'center',
     },
+    flowTimeLabel: {
+        fontSize: 9,
+        fontWeight: '500',
+        color: looviColors.text.tertiary,
+        textAlign: 'center',
+        marginTop: 2,
+        opacity: 0.7,
+    },
     // Keep legacy styles for compatibility
     tripleActionButton: {
         flex: 1,
@@ -1847,56 +2090,105 @@ const styles = StyleSheet.create({
         color: looviColors.text.primary,
     },
     // Pledge Modal styles
-    pledgeModalContent: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: borderRadius['2xl'],
-        padding: spacing.xl,
-        width: '100%',
-        maxWidth: 340,
+    pledgeShroud: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(217, 123, 102, 0.3)',
+    },
+    pledgeCloseButton: {
+        position: 'absolute',
+        top: 50,
+        right: 20,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(0, 0, 0, 0.3)',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.15,
+        justifyContent: 'center',
+        zIndex: 10,
+    },
+    pledgeModalContent: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: spacing.xl,
+    },
+    morningBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.15)',
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.xs,
+        borderRadius: 20,
+        marginBottom: spacing.xl,
+        gap: spacing.xs,
+    },
+    morningBadgeText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
+    pledgeEmojiContainer: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: spacing.lg,
+    },
+    pledgeInstruction: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#FFFFFF',
+        marginBottom: spacing.xl,
+    },
+    pledgeHoldButton: {
+        width: 140,
+        height: 140,
+        borderRadius: 70,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    pledgeProgressRing: {
+        position: 'absolute',
+        width: 140,
+        height: 140,
+        borderRadius: 70,
+        borderWidth: 4,
+        borderColor: '#7FB069',
+        backgroundColor: 'rgba(127, 176, 105, 0.2)',
+    },
+    pledgeButtonInner: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: looviColors.coralOrange,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: looviColors.coralOrange,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.5,
         shadowRadius: 20,
         elevation: 10,
     },
-    pledgeEmojiContainer: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: 'rgba(217, 123, 102, 0.15)',
+    pledgeCelebration: {
+        position: 'absolute',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: spacing.md,
-    },
-    pledgeTitle: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-        textAlign: 'center',
-        marginBottom: spacing.sm,
-    },
-    pledgeDescription: {
-        fontSize: 15,
-        color: looviColors.text.secondary,
-        textAlign: 'center',
-        lineHeight: 22,
-        marginBottom: spacing.lg,
-    },
-    pledgeCompletedContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.sm,
-        backgroundColor: 'rgba(34, 197, 94, 0.1)',
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
-        borderRadius: borderRadius.lg,
-        marginBottom: spacing.md,
     },
     pledgeCompletedText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#22C55E',
+        fontSize: 24,
+        fontWeight: '700',
+        color: '#FFFFFF',
+        textAlign: 'center',
+        marginTop: spacing.lg,
+    },
+    pledgeCompletedSubtext: {
+        fontSize: 16,
+        fontWeight: '400',
+        color: 'rgba(255, 255, 255, 0.7)',
+        textAlign: 'center',
+        marginTop: spacing.sm,
     },
     pledgeButton: {
         backgroundColor: looviColors.accent.primary,
@@ -1997,131 +2289,17 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#FFFFFF',
     },
-    // Wellness Modal Styles
-    wellnessModalContent: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: borderRadius['2xl'],
-        padding: spacing.xl,
-        width: '90%',
-        maxWidth: 400,
-        maxHeight: '80%',
-    },
-    wellnessCloseButton: {
-        position: 'absolute',
-        top: spacing.md,
-        right: spacing.md,
-        width: 32,
-        height: 32,
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 10,
-    },
-    wellnessCloseText: {
-        fontSize: 20,
-        color: looviColors.text.tertiary,
-    },
-    wellnessTitle: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-        textAlign: 'center',
-        marginBottom: spacing.xs,
-    },
-    wellnessSubtitle: {
-        fontSize: 14,
-        fontWeight: '400',
-        color: looviColors.text.secondary,
-        textAlign: 'center',
-        marginBottom: spacing.xl,
-    },
-    wellnessScrollView: {
-        maxHeight: 400,
-    },
-    wellnessScaleContainer: {
-        marginBottom: spacing.lg,
-    },
-    wellnessScaleHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: spacing.sm,
-    },
-    wellnessScaleLabel: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: looviColors.text.primary,
-        marginLeft: spacing.sm,
-    },
-    wellnessScaleButtons: {
-        flexDirection: 'row',
-        gap: spacing.sm,
-    },
-    wellnessScaleButton: {
-        flex: 1,
-        paddingVertical: 12,
-        borderRadius: borderRadius.lg,
-        backgroundColor: 'rgba(0, 0, 0, 0.05)',
-        alignItems: 'center',
-    },
-    wellnessScaleButtonActive: {
-        backgroundColor: looviColors.accent.primary,
-    },
-    wellnessScaleButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: looviColors.text.secondary,
-    },
-    wellnessScaleButtonTextActive: {
-        color: '#FFFFFF',
-    },
-    wellnessSleepButtons: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.sm,
-    },
-    wellnessSleepButton: {
-        paddingVertical: 10,
-        paddingHorizontal: 16,
-        borderRadius: borderRadius.lg,
-        backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    },
-    wellnessSleepButtonActive: {
-        backgroundColor: looviColors.accent.primary,
-    },
-    wellnessSleepButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: looviColors.text.secondary,
-    },
-    wellnessSleepButtonTextActive: {
-        color: '#FFFFFF',
-    },
-    wellnessSaveButton: {
-        backgroundColor: looviColors.accent.primary,
-        paddingVertical: 14,
-        borderRadius: borderRadius.xl,
-        alignItems: 'center',
-        marginTop: spacing.md,
-    },
-    wellnessSaveButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#FFFFFF',
-    },
     // CTA Component Styles
-    ctaContainer: {
-        marginVertical: spacing.md,
+    ctaContainerGlass: {
         borderRadius: borderRadius.xl,
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
         borderWidth: 1,
-        borderColor: looviColors.accent.primary,
-        borderStyle: 'dashed',
+        borderColor: 'rgba(255, 255, 255, 0.4)',
         overflow: 'hidden',
     },
     ctaContent: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: spacing.md,
-        paddingHorizontal: spacing.lg,
+        // Padding handled by GlassCard
     },
     ctaIconContainer: {
         width: 40,
@@ -2179,5 +2357,78 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: '#FFFFFF',
+    },
+    // Floating SOS Button
+    sosFloating: {
+        position: 'absolute',
+        bottom: 100,
+        right: 20,
+        zIndex: 100,
+    },
+    // Carousel Layout Styles
+    carouselContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 140, // Fixed height to accommodate largest button + labels
+    },
+    carouselItem: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    carouselItemActive: {
+        width: 120, // Give it space
+        zIndex: 10,
+        transform: [{ scale: 1.0 }],
+    },
+    carouselItemInactive: {
+        width: 60,
+        opacity: 0.6,
+        transform: [{ scale: 0.8 }],
+    },
+    smallCircleButtonContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    smallCircleButton: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0,0,0,0.05)',
+    },
+    // Sequential Action Button Styles
+    largeCircleButtonContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    largeCircleButton: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: spacing.xs,
+        borderWidth: 4,
+        borderColor: 'rgba(255, 255, 255, 0.9)',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 10,
+    },
+    largeCircleButtonLabel: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        textAlign: 'center',
+        marginTop: spacing.xs,
+    },
+    largeFlowTimeLabel: {
+        fontSize: 11,
+        fontWeight: '500',
+        color: looviColors.text.tertiary,
+        textAlign: 'center',
+        marginTop: 2,
     },
 });

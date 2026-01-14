@@ -2,350 +2,360 @@
  * PanicScreen (Craving Support)
  * 
  * Redesigned SOS/Cravings support screen with:
- * - Calming hero message
- * - 3 floating action buttons: Distract, Alternatives, Contact Circle
- * - Distractions section
- * - Alternatives section (Cheatmeal, Healthy, Superfood)
+ * - Darker, calming theme for focus
+ * - Three central buttons for main actions
+ * - Each button leads to dedicated screen
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     TouchableOpacity,
-    ScrollView,
     Animated,
-    Alert,
+    Dimensions,
+    Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { spacing, borderRadius } from '../theme';
-import LooviBackground, { looviColors } from '../components/LooviBackground';
-import { GlassCard } from '../components/GlassCard';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Calming messages that rotate
 const calmingMessages = [
-    { title: "Don't give up now!", subtitle: "We have lots of options to get you through this craving" },
-    { title: "You're stronger than this!", subtitle: "This craving will pass in just a few minutes" },
-    { title: "Take a deep breath", subtitle: "Let's find something to help you through this moment" },
-    { title: "You've got this!", subtitle: "Every craving you beat makes you stronger" },
+    { title: "You've got this", subtitle: "Take a breath. Choose your next step." },
+    { title: "Stay strong", subtitle: "This moment will pass. You're in control." },
+    { title: "You're not alone", subtitle: "Reach out. Find your calm. Stay focused." },
+    { title: "One moment at a time", subtitle: "Choose what helps you most right now." },
 ];
 
-// Distraction options
-const distractions = [
-    {
-        id: 'breathing',
-        icon: 'wind' as const,
-        title: 'Breathing Exercise',
-        description: 'Calm your mind with guided breathing',
-        screen: 'BreathingExercise',
-        color: looviColors.skyBlue,
-    },
-    {
-        id: 'walk',
-        icon: 'navigation' as const,
-        title: 'Quick 5-Minute Walk',
-        description: 'Movement reduces cravings by 50%',
-        action: 'timer',
-        color: looviColors.accent.success,
-    },
-    {
-        id: 'water',
-        icon: 'droplet' as const,
-        title: 'Drink Water Challenge',
-        description: 'Finish a full glass, then reassess',
-        action: 'challenge',
-        color: looviColors.accent.secondary,
-    },
-];
+// Calming dark theme colors
+const calmColors = {
+    darkBg: '#1A1A2E',
+    darkerBg: '#0F0F1E',
+    text: '#E8E8F0',
+    textSecondary: '#B0B0C8',
+    accent1: '#88A4D6', // Calm blue - Inner Circle (swapped)
+    accent2: '#F5B461', // Warm amber - Distract Me
+    accent3: '#7FB069', // Natural green - Alternatives (swapped)
+    cardBg: 'rgba(255, 255, 255, 0.08)',
+    cardBorder: 'rgba(255, 255, 255, 0.12)',
+};
 
-// Food alternatives
-const alternatives = [
-    {
-        id: 'cheatmeal',
-        icon: 'star' as const,
-        category: 'Cheatmeal',
-        title: 'Dark Chocolate (85%+)',
-        description: 'A healthier treat that still feels indulgent',
-        color: '#8B5CF6',
-    },
-    {
-        id: 'healthy',
-        icon: 'heart' as const,
-        category: 'Healthy Alternative',
-        title: 'Apple with Almond Butter',
-        description: 'Sweet, satisfying, and nutritious',
-        color: looviColors.accent.success,
-    },
-    {
-        id: 'superfood',
-        icon: 'zap' as const,
-        category: 'Superfood',
-        title: 'Mixed Berries',
-        description: 'Antioxidant-rich and naturally sweet',
-        color: looviColors.accent.primary,
-    },
-];
+// Floating particle component
+const PARTICLE_COUNT = 20;
 
-type ActiveSection = 'none' | 'distractions' | 'alternatives';
+interface Particle {
+    id: number;
+    x: number;
+    y: number;
+    size: number;
+    duration: number;
+    delay: number;
+}
+
+const generateParticles = (): Particle[] => {
+    return Array.from({ length: PARTICLE_COUNT }).map((_, i) => ({
+        id: i,
+        x: Math.random() * SCREEN_WIDTH,
+        y: Math.random() * SCREEN_HEIGHT,
+        size: Math.random() * 2 + 1,
+        duration: Math.random() * 10000 + 8000,
+        delay: Math.random() * 4000,
+    }));
+};
+
+const particles = generateParticles();
+
+function FloatingParticle({ particle }: { particle: Particle }) {
+    const translateY = useRef(new Animated.Value(0)).current;
+    const translateX = useRef(new Animated.Value(0)).current;
+    const opacity = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        const animate = () => {
+            translateY.setValue(0);
+            translateX.setValue(0);
+            opacity.setValue(0);
+
+            Animated.sequence([
+                Animated.delay(particle.delay),
+                Animated.parallel([
+                    Animated.timing(translateY, {
+                        toValue: -100 - Math.random() * 80,
+                        duration: particle.duration,
+                        easing: Easing.inOut(Easing.sin),
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(translateX, {
+                        toValue: (Math.random() - 0.5) * 100,
+                        duration: particle.duration,
+                        easing: Easing.inOut(Easing.sin),
+                        useNativeDriver: true,
+                    }),
+                    Animated.sequence([
+                        Animated.timing(opacity, {
+                            toValue: 0.4,
+                            duration: particle.duration * 0.2,
+                            useNativeDriver: true,
+                        }),
+                        Animated.timing(opacity, {
+                            toValue: 0.4,
+                            duration: particle.duration * 0.5,
+                            useNativeDriver: true,
+                        }),
+                        Animated.timing(opacity, {
+                            toValue: 0,
+                            duration: particle.duration * 0.3,
+                            useNativeDriver: true,
+                        }),
+                    ]),
+                ]),
+            ]).start(() => animate());
+        };
+
+        animate();
+    }, []);
+
+    return (
+        <Animated.View
+            style={[
+                styles.particle,
+                {
+                    left: particle.x,
+                    top: particle.y,
+                    width: particle.size,
+                    height: particle.size,
+                    opacity,
+                    transform: [{ translateY }, { translateX }],
+                },
+            ]}
+        />
+    );
+}
 
 export default function PanicScreen() {
     const navigation = useNavigation<any>();
     const [messageIndex, setMessageIndex] = useState(0);
-    const [activeSection, setActiveSection] = useState<ActiveSection>('none');
     const fadeAnim = useState(new Animated.Value(1))[0];
+    const tabBarFadeAnim = useState(new Animated.Value(0))[0];
 
     useEffect(() => {
-        // Rotate messages every 6 seconds
+        // Fade in tab bar to dark on mount
+        Animated.timing(tabBarFadeAnim, {
+            toValue: 1,
+            duration: 600,
+            useNativeDriver: false,
+        }).start();
+
+        // Fade out tab bar to normal on unmount
+        return () => {
+            Animated.timing(tabBarFadeAnim, {
+                toValue: 0,
+                duration: 600,
+                useNativeDriver: false,
+            }).start();
+        };
+    }, []);
+
+    useEffect(() => {
+        // Rotate messages every 8 seconds
         const interval = setInterval(() => {
             Animated.sequence([
-                Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
-                Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+                Animated.timing(fadeAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
+                Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
             ]).start();
             setTimeout(() => {
                 setMessageIndex((prev) => (prev + 1) % calmingMessages.length);
-            }, 300);
-        }, 6000);
+            }, 400);
+        }, 8000);
+
         return () => clearInterval(interval);
     }, [fadeAnim]);
-
-    const handleDistractPress = () => {
-        setActiveSection(activeSection === 'distractions' ? 'none' : 'distractions');
-    };
-
-    const handleAlternativesPress = () => {
-        setActiveSection(activeSection === 'alternatives' ? 'none' : 'alternatives');
-    };
-
-    const handleContactPress = () => {
-        navigation.navigate('Social');
-    };
-
-    const handleDistractionSelect = (distraction: typeof distractions[0]) => {
-        if (distraction.screen) {
-            navigation.navigate(distraction.screen);
-        } else if (distraction.action === 'timer') {
-            Alert.alert(
-                'Quick Walk',
-                'Get up and take a quick walk around. Movement releases dopamine and reduces cravings. Set a 5-minute timer on your phone!',
-                [{ text: 'Start Walking!' }]
-            );
-        } else if (distraction.action === 'challenge') {
-            Alert.alert(
-                'Water Challenge',
-                'Drink a full glass of water right now. Thirst is often mistaken for sugar cravings. Once you finish, take a moment to see how you feel.',
-                [{ text: 'Challenge Accepted!' }]
-            );
-        }
-    };
 
     const currentMessage = calmingMessages[messageIndex];
 
     return (
-        <LooviBackground variant="blueBottom">
-            <SafeAreaView style={styles.container} edges={['top']}>
-                <ScrollView
-                    style={styles.scrollView}
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
-                >
-                    {/* Hero Section */}
-                    <Animated.View style={[styles.heroSection, { opacity: fadeAnim }]}>
-                        <Text style={styles.heroTitle}>{currentMessage.title}</Text>
-                        <Text style={styles.heroSubtitle}>{currentMessage.subtitle}</Text>
-                    </Animated.View>
+        <View style={styles.container}>
+            {/* Simple solid dark background - no edge issues */}
+            <View style={styles.solidBackground} />
 
-                    {/* Three Floating Action Buttons */}
-                    <View style={styles.actionButtons}>
+            {/* Floating particles */}
+            {particles.map((particle) => (
+                <FloatingParticle key={particle.id} particle={particle} />
+            ))}
+
+            {/* Animated dark overlay for tab bar */}
+            <Animated.View
+                style={[
+                    styles.tabBarOverlay,
+                    {
+                        opacity: tabBarFadeAnim,
+                        backgroundColor: tabBarFadeAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ['rgba(15, 15, 30, 0)', 'rgba(15, 15, 30, 0.95)'],
+                        }),
+                    },
+                ]}
+                pointerEvents="none"
+            />
+
+            <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+                {/* Calming message - positioned at top, independent of buttons */}
+                <Animated.View style={[styles.messageContainer, { opacity: fadeAnim }]}>
+                    <Text style={styles.messageTitle}>{currentMessage.title}</Text>
+                    <Text style={styles.messageSubtitle}>{currentMessage.subtitle}</Text>
+                </Animated.View>
+
+                {/* Main content - centered buttons */}
+                <View style={styles.content}>
+                    {/* Three round buttons in a row - centered */}
+                    <View style={styles.mainButtonsRow}>
+                        {/* Talk to Inner Circle */}
                         <TouchableOpacity
-                            style={[
-                                styles.floatingButton,
-                                { backgroundColor: looviColors.accent.warning },
-                                activeSection === 'distractions' && styles.floatingButtonActive
-                            ]}
-                            onPress={handleDistractPress}
+                            style={[styles.floatingButton, { backgroundColor: 'rgba(136, 164, 214, 0.75)' }]}
+                            onPress={() => navigation.navigate('InnerCircle')}
                             activeOpacity={0.8}
                         >
-                            <View style={styles.floatingIconContainer}>
-                                <Feather name="target" size={28} color="#FFFFFF" />
-                            </View>
-                            <Text style={styles.floatingLabel}>Distract me</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[
-                                styles.floatingButton,
-                                { backgroundColor: looviColors.accent.success },
-                                activeSection === 'alternatives' && styles.floatingButtonActive
-                            ]}
-                            onPress={handleAlternativesPress}
-                            activeOpacity={0.8}
-                        >
-                            <View style={styles.floatingIconContainer}>
-                                <Feather name="refresh-cw" size={28} color="#FFFFFF" />
-                            </View>
-                            <Text style={styles.floatingLabel}>Alternatives</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[
-                                styles.floatingButton,
-                                { backgroundColor: looviColors.skyBlue }
-                            ]}
-                            onPress={handleContactPress}
-                            activeOpacity={0.8}
-                        >
-                            <View style={styles.floatingIconContainer}>
+                            <View style={styles.roundButtonIcon}>
                                 <Feather name="users" size={28} color="#FFFFFF" />
                             </View>
-                            <Text style={styles.floatingLabel}>My Circle</Text>
+                            <Text style={styles.roundButtonText}>Inner{'\n'}Circle</Text>
+                        </TouchableOpacity>
+
+                        {/* Distract Me */}
+                        <TouchableOpacity
+                            style={[styles.floatingButton, { backgroundColor: 'rgba(245, 180, 97, 0.75)' }]}
+                            onPress={() => navigation.navigate('DistractMe')}
+                            activeOpacity={0.8}
+                        >
+                            <View style={styles.roundButtonIcon}>
+                                <Feather name="target" size={28} color="#FFFFFF" />
+                            </View>
+                            <Text style={styles.roundButtonText}>Distract{'\n'}Me</Text>
+                        </TouchableOpacity>
+
+                        {/* Alternatives */}
+                        <TouchableOpacity
+                            style={[styles.floatingButton, { backgroundColor: 'rgba(127, 176, 105, 0.75)' }]}
+                            onPress={() => navigation.navigate('Alternatives')}
+                            activeOpacity={0.8}
+                        >
+                            <View style={styles.roundButtonIcon}>
+                                <Feather name="refresh-cw" size={28} color="#FFFFFF" />
+                            </View>
+                            <Text style={styles.roundButtonText}>Alter-{'\n'}natives</Text>
                         </TouchableOpacity>
                     </View>
 
-                    {/* Distractions Section */}
-                    {activeSection === 'distractions' && (
-                        <View style={styles.sectionContainer}>
-                            <Text style={styles.sectionTitle}>Choose a Distraction</Text>
-                            <Text style={styles.sectionSubtitle}>
-                                Shift your focus for just a few minutes
-                            </Text>
-                            {distractions.map((distraction) => (
-                                <TouchableOpacity
-                                    key={distraction.id}
-                                    onPress={() => handleDistractionSelect(distraction)}
-                                    activeOpacity={0.7}
-                                >
-                                    <GlassCard variant="light" padding="md" style={styles.optionCard}>
-                                        <View style={styles.optionRow}>
-                                            <View style={[styles.optionIconContainer, { backgroundColor: `${distraction.color}20` }]}>
-                                                <Feather name={distraction.icon} size={22} color={distraction.color} />
-                                            </View>
-                                            <View style={styles.optionContent}>
-                                                <Text style={styles.optionTitle}>{distraction.title}</Text>
-                                                <Text style={styles.optionDescription}>{distraction.description}</Text>
-                                            </View>
-                                            <Feather name="chevron-right" size={20} color={looviColors.text.muted} />
-                                        </View>
-                                    </GlassCard>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    )}
-
-                    {/* Alternatives Section */}
-                    {activeSection === 'alternatives' && (
-                        <View style={styles.sectionContainer}>
-                            <Text style={styles.sectionTitle}>Healthy Alternatives</Text>
-                            <Text style={styles.sectionSubtitle}>
-                                Satisfy your craving the smart way
-                            </Text>
-                            {alternatives.map((alt) => (
-                                <GlassCard
-                                    key={alt.id}
-                                    variant="light"
-                                    padding="md"
-                                    style={[styles.alternativeCard, { borderLeftColor: alt.color }]}
-                                >
-                                    <View style={styles.alternativeHeader}>
-                                        <View style={[styles.categoryBadge, { backgroundColor: `${alt.color}15` }]}>
-                                            <Feather name={alt.icon} size={12} color={alt.color} style={{ marginRight: 4 }} />
-                                            <Text style={[styles.alternativeCategory, { color: alt.color }]}>
-                                                {alt.category}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    <View style={styles.optionRow}>
-                                        <View style={[styles.altIconContainer, { backgroundColor: `${alt.color}15` }]}>
-                                            <Feather name={alt.icon} size={24} color={alt.color} />
-                                        </View>
-                                        <View style={styles.optionContent}>
-                                            <Text style={styles.optionTitle}>{alt.title}</Text>
-                                            <Text style={styles.optionDescription}>{alt.description}</Text>
-                                        </View>
-                                    </View>
-                                </GlassCard>
-                            ))}
-                        </View>
-                    )}
-
-                    {/* Quick Access Buttons */}
-                    <View style={styles.quickAccess}>
+                    {/* Secondary buttons - smaller */}
+                    <View style={styles.secondaryButtonsRow}>
+                        {/* Breathe */}
                         <TouchableOpacity
-                            style={styles.quickButton}
+                            style={styles.secondaryButton}
                             onPress={() => navigation.navigate('BreathingExercise')}
-                            activeOpacity={0.8}
+                            activeOpacity={0.85}
                         >
-                            <GlassCard variant="light" padding="md" style={styles.quickCard}>
-                                <View style={[styles.quickIconBg, { backgroundColor: `${looviColors.skyBlue}20` }]}>
-                                    <Feather name="wind" size={24} color={looviColors.skyBlue} />
-                                </View>
-                                <Text style={styles.quickText}>Breathe</Text>
-                            </GlassCard>
+                            <Feather name="wind" size={20} color={calmColors.text} style={{ marginRight: 8 }} />
+                            <Text style={styles.secondaryButtonText}>Breathe</Text>
                         </TouchableOpacity>
+
+                        {/* My Why */}
                         <TouchableOpacity
-                            style={styles.quickButton}
+                            style={styles.secondaryButton}
                             onPress={() => navigation.navigate('Reasons')}
-                            activeOpacity={0.8}
+                            activeOpacity={0.85}
                         >
-                            <GlassCard variant="light" padding="md" style={styles.quickCard}>
-                                <View style={[styles.quickIconBg, { backgroundColor: `${looviColors.accent.primary}20` }]}>
-                                    <Feather name="heart" size={24} color={looviColors.accent.primary} />
-                                </View>
-                                <Text style={styles.quickText}>My Why</Text>
-                            </GlassCard>
+                            <Feather name="heart" size={20} color={calmColors.text} style={{ marginRight: 8 }} />
+                            <Text style={styles.secondaryButtonText}>My Why</Text>
                         </TouchableOpacity>
                     </View>
 
-                    {/* Encouragement Footer */}
-                    <View style={styles.footer}>
-                        <Feather name="award" size={16} color={looviColors.text.tertiary} style={{ marginRight: 8 }} />
-                        <Text style={styles.footerText}>
-                            Every craving you overcome makes the next one easier
+                    {/* Subtle reminder */}
+                    <View style={styles.reminderContainer}>
+                        <View style={styles.reminderDot} />
+                        <Text style={styles.reminderText}>
+                            This craving will pass. You're stronger than you think.
                         </Text>
                     </View>
-                </ScrollView>
+                </View>
             </SafeAreaView>
-        </LooviBackground>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: '#0F0F1E',
     },
-    scrollView: {
+    solidBackground: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: '#0F0F1E',
+        zIndex: 0,
+    },
+    particle: {
+        position: 'absolute',
+        backgroundColor: 'rgba(255, 255, 255, 0.6)',
+        borderRadius: 999,
+        shadowColor: '#FFFFFF',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 3,
+        zIndex: 2,
+    },
+    safeArea: {
         flex: 1,
+        zIndex: 10,
     },
-    scrollContent: {
-        paddingHorizontal: spacing.screen.horizontal,
-        paddingBottom: 100,
-    },
-    // Hero Section
-    heroSection: {
+    content: {
+        flex: 1,
+        justifyContent: 'center',
         alignItems: 'center',
-        paddingVertical: spacing.xl,
-        paddingHorizontal: spacing.md,
+        paddingHorizontal: spacing.xl,
+        marginTop: -60, // Offset to keep buttons centered despite message taking top space
     },
-    heroTitle: {
+    // Tab Bar Overlay
+    tabBarOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 100,
+        zIndex: 100,
+    },
+    // Message Section - fixed position at top
+    messageContainer: {
+        alignItems: 'center',
+        paddingTop: spacing.xl,
+        paddingHorizontal: spacing.xl,
+        height: 120, // Fixed height so it doesn't affect layout below
+    },
+    messageTitle: {
         fontSize: 32,
-        fontWeight: '800',
-        color: looviColors.text.primary,
+        fontWeight: '700',
+        color: calmColors.text,
         textAlign: 'center',
-        marginBottom: spacing.sm,
+        marginBottom: spacing.xs,
+        letterSpacing: -0.5,
     },
-    heroSubtitle: {
-        fontSize: 16,
+    messageSubtitle: {
+        fontSize: 15,
         fontWeight: '400',
-        color: looviColors.text.secondary,
+        color: calmColors.textSecondary,
         textAlign: 'center',
-        lineHeight: 24,
+        lineHeight: 22,
+        maxWidth: SCREEN_WIDTH * 0.85,
     },
-    // Floating Action Buttons
-    actionButtons: {
+    // Main Buttons Row - Round buttons
+    mainButtonsRow: {
         flexDirection: 'row',
         justifyContent: 'center',
+        alignItems: 'center',
         gap: spacing.md,
         marginBottom: spacing.xl,
     },
@@ -355,137 +365,67 @@ const styles = StyleSheet.create({
         borderRadius: 50,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 8,
-        elevation: 6,
-    },
-    floatingButtonActive: {
-        transform: [{ scale: 1.05 }],
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
         shadowOpacity: 0.4,
+        shadowRadius: 20,
+        elevation: 15,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.2)',
     },
-    floatingIconContainer: {
-        marginBottom: 6,
-    },
-    floatingLabel: {
-        fontSize: 11,
-        fontWeight: '600',
-        color: '#FFFFFF',
-        textAlign: 'center',
-    },
-    // Section Container
-    sectionContainer: {
-        marginBottom: spacing.xl,
-    },
-    sectionTitle: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: looviColors.text.primary,
+    roundButtonIcon: {
         marginBottom: spacing.xs,
     },
-    sectionSubtitle: {
-        fontSize: 14,
-        fontWeight: '400',
-        color: looviColors.text.secondary,
-        marginBottom: spacing.lg,
-    },
-    // Option Cards
-    optionCard: {
-        marginBottom: spacing.sm,
-    },
-    optionRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    optionIconContainer: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: spacing.md,
-    },
-    optionContent: {
-        flex: 1,
-    },
-    optionTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-    },
-    optionDescription: {
-        fontSize: 13,
-        fontWeight: '400',
-        color: looviColors.text.secondary,
-        marginTop: 2,
-    },
-    // Alternative Cards
-    alternativeCard: {
-        marginBottom: spacing.sm,
-        borderLeftWidth: 4,
-    },
-    alternativeHeader: {
-        marginBottom: spacing.sm,
-    },
-    categoryBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        alignSelf: 'flex-start',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    alternativeCategory: {
+    roundButtonText: {
         fontSize: 11,
         fontWeight: '700',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
+        color: '#FFFFFF',
+        textAlign: 'center',
+        lineHeight: 14,
+        letterSpacing: 0.2,
     },
-    altIconContainer: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: spacing.md,
-    },
-    // Quick Access
-    quickAccess: {
+    // Secondary Buttons Row - Smaller horizontal buttons
+    secondaryButtonsRow: {
         flexDirection: 'row',
         gap: spacing.md,
-        marginBottom: spacing.lg,
+        marginBottom: spacing.xl,
     },
-    quickButton: {
-        flex: 1,
-    },
-    quickCard: {
-        alignItems: 'center',
-        paddingVertical: spacing.lg,
-    },
-    quickIconBg: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    quickText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: looviColors.text.primary,
-        marginTop: spacing.sm,
-    },
-    // Footer
-    footer: {
+    secondaryButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: spacing.lg,
+        backgroundColor: calmColors.cardBg,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.lg,
+        borderRadius: borderRadius.xl,
+        borderWidth: 1,
+        borderColor: calmColors.cardBorder,
     },
-    footerText: {
+    secondaryButtonText: {
         fontSize: 14,
+        fontWeight: '600',
+        color: calmColors.text,
+    },
+    // Reminder
+    reminderContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: spacing.lg,
+        paddingHorizontal: spacing.lg,
+    },
+    reminderDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: calmColors.accent1,
+        marginRight: spacing.sm,
+        opacity: 0.6,
+    },
+    reminderText: {
+        fontSize: 13,
         fontWeight: '500',
-        color: looviColors.text.tertiary,
+        color: calmColors.textSecondary,
         textAlign: 'center',
+        flex: 1,
+        opacity: 0.8,
     },
 });

@@ -22,6 +22,7 @@ import {
     Keyboard,
     TouchableWithoutFeedback,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import Slider from '@react-native-community/slider';
 import { spacing, borderRadius } from '../theme';
@@ -43,7 +44,7 @@ interface FoodScannerModalProps {
     selectedDate?: string; // For backdating (YYYY-MM-DD format)
 }
 
-type ScanStep = 'select' | 'describe' | 'analyzing' | 'result';
+type ScanStep = 'select' | 'describe' | 'text-input' | 'analyzing' | 'result';
 
 export default function FoodScannerModal({
     visible,
@@ -54,6 +55,7 @@ export default function FoodScannerModal({
     const [step, setStep] = useState<ScanStep>('select');
     const [imageUri, setImageUri] = useState<string | null>(null);
     const [description, setDescription] = useState('');
+    const [textOnlyInput, setTextOnlyInput] = useState(''); // For text-only food entry
     const [result, setResult] = useState<AnalysisResult | null>(null);
     const [portionPercent, setPortionPercent] = useState(100);
     const [editedName, setEditedName] = useState('');
@@ -87,6 +89,7 @@ export default function FoodScannerModal({
         setStep('select');
         setImageUri(null);
         setDescription('');
+        setTextOnlyInput('');
         setResult(null);
         setPortionPercent(100);
         setEditedName('');
@@ -179,8 +182,28 @@ export default function FoodScannerModal({
         }
     };
 
+    const processTextOnly = async () => {
+        if (!textOnlyInput.trim()) {
+            Alert.alert('Description Required', 'Please describe what you ate.');
+            return;
+        }
+        setStep('analyzing');
+
+        try {
+            // Use text description only - pass empty string for imageUri
+            const analysisResult = await analyzeFood('', textOnlyInput.trim());
+            setResult(analysisResult);
+            setEditedName(analysisResult.foodName);
+            setStep('result');
+        } catch (error) {
+            console.error('Analysis error:', error);
+            Alert.alert('Error', 'Failed to analyze food description. Please try again.');
+            resetState();
+        }
+    };
+
     const handleSave = async () => {
-        if (!imageUri || !result) return;
+        if (!result) return;
 
         // Apply portion percentage to macros
         const portionMultiplier = portionPercent / 100;
@@ -192,7 +215,7 @@ export default function FoodScannerModal({
 
         const scannedItem: ScannedItem = {
             id: generateScanId(),
-            imageUri,
+            imageUri: imageUri || '', // Empty string for text-only entries
             name: editedName || result.foodName,
             timestamp,
             portionPercent,
@@ -224,10 +247,39 @@ export default function FoodScannerModal({
             case 'select':
                 return (
                     <ScrollView style={styles.selectScrollView} showsVerticalScrollIndicator={false}>
-                        <Text style={styles.modalTitle}>Add Food</Text>
+                        {/* Header Icon */}
+                        <View style={styles.headerIconContainer}>
+                            <View style={styles.headerIcon}>
+                                <Text style={styles.headerIconEmoji}>📷</Text>
+                            </View>
+                        </View>
+
+                        <Text style={styles.modalTitle}>Track Your Food</Text>
                         <Text style={styles.modalSubtitle}>
-                            Scan a new item or quickly add from recent foods
+                            Scan what you eat to track your sugar intake
                         </Text>
+
+                        {/* Quick Guide */}
+                        <View style={styles.quickGuide}>
+                            <View style={styles.guideStep}>
+                                <View style={styles.guideStepNumber}>
+                                    <Text style={styles.guideStepNumberText}>1</Text>
+                                </View>
+                                <Text style={styles.guideStepText}>Take a photo of your food</Text>
+                            </View>
+                            <View style={styles.guideStep}>
+                                <View style={styles.guideStepNumber}>
+                                    <Text style={styles.guideStepNumberText}>2</Text>
+                                </View>
+                                <Text style={styles.guideStepText}>AI analyzes nutrition info</Text>
+                            </View>
+                            <View style={styles.guideStep}>
+                                <View style={styles.guideStepNumber}>
+                                    <Text style={styles.guideStepNumberText}>3</Text>
+                                </View>
+                                <Text style={styles.guideStepText}>Adjust portion & save</Text>
+                            </View>
+                        </View>
 
                         <View style={styles.optionsContainer}>
                             <TouchableOpacity
@@ -235,8 +287,11 @@ export default function FoodScannerModal({
                                 onPress={takePhoto}
                                 activeOpacity={0.8}
                             >
-                                <Text style={styles.optionEmoji}>📷</Text>
+                                <View style={styles.optionIconBg}>
+                                    <Text style={styles.optionEmoji}>📷</Text>
+                                </View>
                                 <Text style={styles.optionText}>Take Photo</Text>
+                                <Text style={styles.optionHint}>Best for accuracy</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
@@ -244,10 +299,31 @@ export default function FoodScannerModal({
                                 onPress={pickFromGallery}
                                 activeOpacity={0.8}
                             >
-                                <Text style={styles.optionEmoji}>🖼️</Text>
+                                <View style={styles.optionIconBg}>
+                                    <Text style={styles.optionEmoji}>🖼️</Text>
+                                </View>
                                 <Text style={styles.optionText}>Gallery</Text>
+                                <Text style={styles.optionHint}>From saved photos</Text>
                             </TouchableOpacity>
                         </View>
+
+                        {/* Text-only input option */}
+                        <TouchableOpacity
+                            style={styles.textInputOption}
+                            onPress={() => setStep('text-input')}
+                            activeOpacity={0.8}
+                        >
+                            <View style={styles.textInputOptionIcon}>
+                                <Text style={styles.optionEmoji}>✏️</Text>
+                            </View>
+                            <View style={styles.textInputOptionContent}>
+                                <Text style={styles.textInputOptionTitle}>Describe Your Food</Text>
+                                <Text style={styles.textInputOptionHint}>
+                                    Type what you ate for a quick estimate
+                                </Text>
+                            </View>
+                            <Feather name="chevron-right" size={20} color={looviColors.text.tertiary} />
+                        </TouchableOpacity>
 
                         {/* Recently Scanned Foods */}
                         {recentFoods.length > 0 && (
@@ -317,28 +393,113 @@ export default function FoodScannerModal({
                     </TouchableWithoutFeedback>
                 );
 
+            case 'text-input':
+                return (
+                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                        <KeyboardAvoidingView 
+                            style={styles.textInputContainer}
+                            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        >
+                            {/* Header */}
+                            <View style={styles.textInputHeader}>
+                                <View style={styles.textInputIconLarge}>
+                                    <Text style={{ fontSize: 40 }}>✏️</Text>
+                                </View>
+                                <Text style={styles.stepTitle}>Describe Your Food</Text>
+                                <Text style={styles.stepSubtitle}>
+                                    Be as detailed as you'd like - more detail means better estimates
+                                </Text>
+                            </View>
+
+                            {/* Input field */}
+                            <TextInput
+                                style={styles.textOnlyInput}
+                                placeholder="e.g., Plate of grilled chicken with rice and steamed broccoli..."
+                                placeholderTextColor={looviColors.text.muted}
+                                value={textOnlyInput}
+                                onChangeText={setTextOnlyInput}
+                                multiline
+                                numberOfLines={4}
+                                textAlignVertical="top"
+                                autoFocus
+                            />
+
+                            {/* Examples */}
+                            <View style={styles.examplesContainer}>
+                                <Text style={styles.examplesTitle}>Examples:</Text>
+                                <TouchableOpacity 
+                                    style={styles.exampleChip}
+                                    onPress={() => setTextOnlyInput('Large bowl of oatmeal with banana and honey')}
+                                >
+                                    <Text style={styles.exampleText}>🥣 Oatmeal with banana</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity 
+                                    style={styles.exampleChip}
+                                    onPress={() => setTextOnlyInput('Grilled chicken sandwich with lettuce and tomato')}
+                                >
+                                    <Text style={styles.exampleText}>🥪 Chicken sandwich</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity 
+                                    style={styles.exampleChip}
+                                    onPress={() => setTextOnlyInput('Slice of pepperoni pizza')}
+                                >
+                                    <Text style={styles.exampleText}>🍕 Pizza slice</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Buttons */}
+                            <View style={styles.buttonRow}>
+                                <TouchableOpacity 
+                                    style={styles.skipButton} 
+                                    onPress={() => { setTextOnlyInput(''); setStep('select'); }}
+                                >
+                                    <Text style={styles.skipText}>Back</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity 
+                                    style={[
+                                        styles.continueButton,
+                                        !textOnlyInput.trim() && styles.continueButtonDisabled
+                                    ]} 
+                                    onPress={processTextOnly}
+                                    disabled={!textOnlyInput.trim()}
+                                >
+                                    <Text style={styles.continueText}>Analyze</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </KeyboardAvoidingView>
+                    </TouchableWithoutFeedback>
+                );
+
             case 'analyzing':
                 return (
-                    <>
-                        {imageUri && (
+                    <View style={styles.analyzingWrapper}>
+                        {imageUri ? (
                             <Image source={{ uri: imageUri }} style={styles.previewImage} />
+                        ) : (
+                            <View style={styles.textAnalyzingIcon}>
+                                <Text style={{ fontSize: 48 }}>🔍</Text>
+                            </View>
                         )}
                         <View style={styles.analyzingContainer}>
-                            <ActivityIndicator size="large" color={looviColors.accent.primary} />
+                            <ActivityIndicator size="large" color={looviColors.coralOrange} />
                             <Text style={styles.analyzingText}>Analyzing food...</Text>
                             <Text style={styles.analyzingHint}>
-                                Detecting nutritional content
+                                {imageUri ? 'Detecting nutritional content' : 'Estimating from your description'}
                             </Text>
                         </View>
-                    </>
+                    </View>
                 );
 
             case 'result':
                 const healthColor = result ? getHealthScoreColor(result.healthScore) : looviColors.accent.success;
                 return (
                     <ScrollView showsVerticalScrollIndicator={false} style={styles.resultScroll}>
-                        {imageUri && (
+                        {imageUri ? (
                             <Image source={{ uri: imageUri }} style={styles.previewImage} />
+                        ) : (
+                            <View style={styles.textResultIcon}>
+                                <Text style={{ fontSize: 40 }}>🍽️</Text>
+                            </View>
                         )}
                         {result && (
                             <View style={styles.resultContainer}>
@@ -384,8 +545,9 @@ export default function FoodScannerModal({
                                         step={25}
                                         value={portionPercent}
                                         onValueChange={setPortionPercent}
-                                        minimumTrackTintColor={looviColors.accent.primary}
+                                        minimumTrackTintColor={looviColors.coralOrange}
                                         maximumTrackTintColor="rgba(0,0,0,0.1)"
+                                        thumbTintColor={looviColors.coralOrange}
                                     />
                                 </View>
 
@@ -448,22 +610,27 @@ export default function FoodScannerModal({
         <Modal
             visible={visible}
             transparent
-            animationType="slide"
+            animationType="fade"
             onRequestClose={handleClose}
         >
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardAvoidingView}
             >
-                <View style={styles.overlay}>
-                    <View style={styles.modalContent}>
-                        {/* Close Button */}
-                        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-                            <Text style={styles.closeText}>✕</Text>
-                        </TouchableOpacity>
-                        {renderContent()}
+                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                    <View style={styles.overlay}>
+                        <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+                            <View style={styles.modalCard}>
+                                {/* Close Button */}
+                                <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+                                    <Feather name="x" size={20} color={looviColors.text.secondary} />
+                                </TouchableOpacity>
+                                
+                                {renderContent()}
+                            </View>
+                        </TouchableWithoutFeedback>
                     </View>
-                </View>
+                </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
         </Modal>
     );
@@ -475,20 +642,21 @@ const styles = StyleSheet.create({
     },
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
-        justifyContent: 'flex-end',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: spacing.lg,
+    },
+    modalCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        maxHeight: '90%',
+        width: '100%',
+        maxWidth: 420,
+        overflow: 'hidden',
     },
     describeContainer: {
-        // Remove flex: 1 to prevent layout issues
-    },
-    modalContent: {
-        backgroundColor: '#FFFFFF',
-        borderTopLeftRadius: borderRadius['2xl'],
-        borderTopRightRadius: borderRadius['2xl'],
-        padding: spacing.xl,
-        paddingTop: spacing.lg,
-        minHeight: '50%',
-        maxHeight: '90%',
+        // Container for describe step
     },
     closeButton: {
         position: 'absolute',
@@ -496,13 +664,34 @@ const styles = StyleSheet.create({
         right: spacing.md,
         width: 32,
         height: 32,
+        borderRadius: 16,
+        backgroundColor: 'rgba(0, 0, 0, 0.05)',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 10,
     },
     closeText: {
         fontSize: 20,
-        color: looviColors.text.tertiary,
+        color: looviColors.text.primary,
+    },
+    selectScrollView: {
+        padding: spacing.xl,
+        paddingTop: spacing.xl + 8,
+    },
+    headerIconContainer: {
+        alignItems: 'center',
+        marginBottom: spacing.lg,
+    },
+    headerIcon: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: 'rgba(232, 168, 124, 0.15)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerIconEmoji: {
+        fontSize: 40,
     },
     modalTitle: {
         fontSize: 24,
@@ -512,32 +701,168 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     modalSubtitle: {
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: '400',
         color: looviColors.text.secondary,
-        marginBottom: spacing.xl,
+        marginBottom: spacing.lg,
         textAlign: 'center',
+        lineHeight: 22,
+    },
+    quickGuide: {
+        backgroundColor: 'rgba(0, 0, 0, 0.03)',
+        borderRadius: borderRadius.xl,
+        padding: spacing.md,
+        marginBottom: spacing.lg,
+        gap: spacing.sm,
+    },
+    guideStep: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    guideStepNumber: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: looviColors.coralOrange,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: spacing.sm,
+    },
+    guideStepNumberText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
+    guideStepText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: looviColors.text.secondary,
+        flex: 1,
     },
     optionsContainer: {
         flexDirection: 'row',
         gap: spacing.md,
-        marginBottom: spacing.xl,
+        marginBottom: spacing.md,
     },
     optionButton: {
         flex: 1,
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        backgroundColor: 'rgba(0, 0, 0, 0.03)',
         borderRadius: borderRadius.xl,
-        padding: spacing.xl,
+        padding: spacing.lg,
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(0, 0, 0, 0.06)',
+    },
+    optionIconBg: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: 'rgba(232, 168, 124, 0.15)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: spacing.sm,
     },
     optionEmoji: {
-        fontSize: 40,
-        marginBottom: spacing.sm,
+        fontSize: 28,
     },
     optionText: {
         fontSize: 14,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        marginBottom: 2,
+    },
+    optionHint: {
+        fontSize: 11,
+        fontWeight: '400',
+        color: looviColors.text.muted,
+    },
+    // Text input option (in select step)
+    textInputOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.03)',
+        borderRadius: borderRadius.xl,
+        padding: spacing.md,
+        marginBottom: spacing.lg,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 0, 0, 0.06)',
+    },
+    textInputOptionIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(232, 168, 124, 0.15)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: spacing.md,
+    },
+    textInputOptionContent: {
+        flex: 1,
+    },
+    textInputOptionTitle: {
+        fontSize: 14,
         fontWeight: '600',
         color: looviColors.text.primary,
+        marginBottom: 2,
+    },
+    textInputOptionHint: {
+        fontSize: 12,
+        fontWeight: '400',
+        color: looviColors.text.muted,
+    },
+    // Text-only input step
+    textInputContainer: {
+        flex: 1,
+        padding: spacing.xl,
+        paddingTop: spacing.xl + 8,
+    },
+    textInputHeader: {
+        alignItems: 'center',
+        marginBottom: spacing.lg,
+    },
+    textInputIconLarge: {
+        width: 70,
+        height: 70,
+        borderRadius: 35,
+        backgroundColor: 'rgba(232, 168, 124, 0.15)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: spacing.md,
+    },
+    textOnlyInput: {
+        backgroundColor: 'rgba(0, 0, 0, 0.03)',
+        borderRadius: borderRadius.xl,
+        padding: spacing.lg,
+        fontSize: 15,
+        color: looviColors.text.primary,
+        minHeight: 100,
+        textAlignVertical: 'top',
+        borderWidth: 1,
+        borderColor: 'rgba(0, 0, 0, 0.06)',
+        marginBottom: spacing.md,
+    },
+    examplesContainer: {
+        marginBottom: spacing.lg,
+    },
+    examplesTitle: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: looviColors.text.muted,
+        marginBottom: spacing.sm,
+    },
+    exampleChip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.03)',
+        borderRadius: borderRadius.lg,
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.md,
+        marginBottom: spacing.xs,
+    },
+    exampleText: {
+        fontSize: 13,
+        color: looviColors.text.secondary,
+    },
+    continueButtonDisabled: {
+        opacity: 0.5,
     },
     cancelButton: {
         paddingVertical: spacing.sm,
@@ -550,12 +875,12 @@ const styles = StyleSheet.create({
     },
     previewImage: {
         width: '100%',
-        height: 180,
+        height: 160,
         borderRadius: borderRadius.xl,
-        marginBottom: spacing.lg,
+        marginBottom: spacing.md,
     },
     stepTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '700',
         color: looviColors.text.primary,
         textAlign: 'center',
@@ -574,9 +899,11 @@ const styles = StyleSheet.create({
         padding: spacing.md,
         fontSize: 15,
         color: looviColors.text.primary,
-        minHeight: 80,
+        minHeight: 70,
         textAlignVertical: 'top',
-        marginBottom: spacing.lg,
+        marginBottom: spacing.md,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 0, 0, 0.06)',
     },
     buttonRow: {
         flexDirection: 'row',
@@ -599,12 +926,33 @@ const styles = StyleSheet.create({
         paddingVertical: 14,
         borderRadius: borderRadius.xl,
         alignItems: 'center',
-        backgroundColor: looviColors.accent.primary,
+        backgroundColor: looviColors.coralOrange,
     },
     continueText: {
         fontSize: 15,
         fontWeight: '600',
         color: '#FFFFFF',
+    },
+    analyzingWrapper: {
+        padding: spacing.xl,
+        paddingTop: spacing['3xl'],
+        alignItems: 'center',
+    },
+    textAnalyzingIcon: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 100,
+        marginBottom: spacing.md,
+    },
+    textResultIcon: {
+        width: 70,
+        height: 70,
+        borderRadius: 35,
+        backgroundColor: 'rgba(232, 168, 124, 0.15)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        alignSelf: 'center',
+        marginBottom: spacing.md,
     },
     analyzingContainer: {
         alignItems: 'center',
@@ -619,17 +967,19 @@ const styles = StyleSheet.create({
     analyzingHint: {
         fontSize: 13,
         fontWeight: '400',
-        color: looviColors.text.tertiary,
+        color: looviColors.text.muted,
         marginTop: spacing.xs,
     },
     resultScroll: {
         maxHeight: '100%',
+        padding: spacing.xl,
+        paddingTop: spacing.xl + 8,
     },
     resultContainer: {
         alignItems: 'center',
     },
     foodName: {
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: '700',
         color: looviColors.text.primary,
         textAlign: 'center',
@@ -642,12 +992,12 @@ const styles = StyleSheet.create({
         marginBottom: spacing.md,
     },
     nameInput: {
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: '700',
         color: looviColors.text.primary,
         textAlign: 'center',
         borderBottomWidth: 2,
-        borderBottomColor: looviColors.accent.primary,
+        borderBottomColor: looviColors.coralOrange,
         paddingBottom: spacing.xs,
         marginBottom: spacing.md,
     },
@@ -655,30 +1005,30 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'baseline',
         justifyContent: 'center',
-        paddingVertical: spacing.md,
-        paddingHorizontal: spacing.xl,
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.lg,
         borderRadius: borderRadius.xl,
-        marginBottom: spacing.lg,
+        marginBottom: spacing.md,
     },
     healthScoreValue: {
-        fontSize: 36,
+        fontSize: 32,
         fontWeight: '800',
     },
     healthScoreLabel: {
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '500',
         color: looviColors.text.secondary,
         marginLeft: spacing.xs,
     },
     portionSection: {
         width: '100%',
-        marginBottom: spacing.lg,
+        marginBottom: spacing.md,
     },
     sectionLabel: {
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '600',
         color: looviColors.text.primary,
-        marginBottom: spacing.sm,
+        marginBottom: spacing.xs,
         textAlign: 'center',
     },
     portionMarkers: {
@@ -689,10 +1039,10 @@ const styles = StyleSheet.create({
     portionMarker: {
         fontSize: 11,
         fontWeight: '500',
-        color: looviColors.text.tertiary,
+        color: looviColors.text.muted,
     },
     portionMarkerActive: {
-        color: looviColors.accent.primary,
+        color: looviColors.coralOrange,
         fontWeight: '700',
     },
     slider: {
@@ -704,7 +1054,7 @@ const styles = StyleSheet.create({
         flexWrap: 'wrap',
         justifyContent: 'center',
         gap: spacing.sm,
-        marginBottom: spacing.lg,
+        marginBottom: spacing.md,
     },
     macroItem: {
         backgroundColor: 'rgba(0, 0, 0, 0.03)',
@@ -712,26 +1062,28 @@ const styles = StyleSheet.create({
         paddingVertical: spacing.sm,
         paddingHorizontal: spacing.md,
         alignItems: 'center',
-        minWidth: 70,
+        minWidth: 65,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 0, 0, 0.06)',
     },
     macroValue: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '700',
         color: looviColors.text.primary,
     },
     macroLabel: {
         fontSize: 10,
         fontWeight: '500',
-        color: looviColors.text.tertiary,
+        color: looviColors.text.muted,
         marginTop: 2,
     },
     suggestion: {
         fontSize: 12,
         fontWeight: '400',
-        color: looviColors.text.tertiary,
+        color: looviColors.text.secondary,
         textAlign: 'center',
         fontStyle: 'italic',
-        marginBottom: spacing.lg,
+        marginBottom: spacing.md,
     },
     resultButtons: {
         flexDirection: 'row',
@@ -743,7 +1095,7 @@ const styles = StyleSheet.create({
         paddingVertical: 14,
         borderRadius: borderRadius.xl,
         alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.05)',
+        backgroundColor: 'rgba(0, 0, 0, 0.05)',
     },
     retryText: {
         fontSize: 15,
@@ -755,7 +1107,7 @@ const styles = StyleSheet.create({
         paddingVertical: 14,
         borderRadius: borderRadius.xl,
         alignItems: 'center',
-        backgroundColor: looviColors.accent.primary,
+        backgroundColor: looviColors.coralOrange,
     },
     saveText: {
         fontSize: 15,
@@ -763,17 +1115,14 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
     },
     // Recently scanned foods styles
-    selectScrollView: {
-        flex: 1,
-    },
     recentSection: {
-        marginTop: spacing.xl,
+        marginTop: spacing.lg,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(0, 0, 0, 0.05)',
-        paddingTop: spacing.lg,
+        borderTopColor: 'rgba(0, 0, 0, 0.06)',
+        paddingTop: spacing.md,
     },
     recentTitle: {
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '600',
         color: looviColors.text.secondary,
         marginBottom: spacing.sm,
@@ -801,12 +1150,12 @@ const styles = StyleSheet.create({
     recentMacros: {
         fontSize: 12,
         fontWeight: '400',
-        color: looviColors.text.tertiary,
+        color: looviColors.text.muted,
     },
     recentAddIcon: {
         fontSize: 20,
         fontWeight: '600',
-        color: looviColors.accent.primary,
+        color: looviColors.coralOrange,
         paddingHorizontal: spacing.sm,
     },
 });

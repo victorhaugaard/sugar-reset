@@ -1,0 +1,146 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ================================
+    // HELPER FUNCTIONS
+    // ================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+    
+    // ================================
+    // USER PROFILES
+    // ================================
+    
+    match /users/{userId} {
+      // Anyone authenticated can read basic user info (for search)
+      allow read: if isAuthenticated();
+      
+      // Only the user can write their own profile
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+      
+      // Friends subcollection
+      match /friends/{friendId} {
+        // User can read their own friends
+        allow read: if isOwner(userId);
+        
+        // Friends are added via Cloud Function or by both users
+        // For now, allow the user to manage their own friends list
+        allow create: if isOwner(userId);
+        allow delete: if isOwner(userId);
+        
+        // No updates needed - just create/delete
+        allow update: if false;
+      }
+    }
+    
+    // ================================
+    // USER STATS (Public for leaderboard)
+    // ================================
+    
+    match /userStats/{userId} {
+      // Anyone authenticated can read (for leaderboard/friend stats)
+      allow read: if isAuthenticated();
+      
+      // Only the user can write their own stats
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+    
+    // ================================
+    // FRIEND REQUESTS
+    // ================================
+    
+    match /friendRequests/{requestId} {
+      // Both sender and receiver can read
+      allow read: if isAuthenticated() && (
+        resource.data.fromUid == request.auth.uid ||
+        resource.data.toUid == request.auth.uid
+      );
+      
+      // Sender can create a request
+      allow create: if isAuthenticated() && 
+        request.resource.data.fromUid == request.auth.uid &&
+        request.resource.data.status == 'pending';
+      
+      // Receiver can update status (accept/decline)
+      allow update: if isAuthenticated() && 
+        resource.data.toUid == request.auth.uid &&
+        request.resource.data.status in ['accepted', 'declined'];
+      
+      // Either party can delete (cancel/cleanup)
+      allow delete: if isAuthenticated() && (
+        resource.data.fromUid == request.auth.uid ||
+        resource.data.toUid == request.auth.uid
+      );
+    }
+    
+    // ================================
+    // COMMUNITY POSTS
+    // ================================
+    
+    match /posts/{postId} {
+      // Anyone authenticated can read posts
+      allow read: if isAuthenticated();
+      
+      // Authenticated users can create posts
+      allow create: if isAuthenticated() && 
+        request.resource.data.authorId == request.auth.uid;
+      
+      // Only author can update their own post
+      allow update: if isAuthenticated() && 
+        resource.data.authorId == request.auth.uid;
+      
+      // Only author can delete their own post
+      allow delete: if isAuthenticated() && 
+        resource.data.authorId == request.auth.uid;
+      
+      // Votes subcollection
+      match /votes/{oderId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated();
+      }
+      
+      // Comments subcollection
+      match /comments/{commentId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && 
+          request.resource.data.authorId == request.auth.uid;
+        allow delete: if isAuthenticated() && 
+          resource.data.authorId == request.auth.uid;
+      }
+    }
+    
+    // ================================
+    // SOS EVENTS (for history)
+    // ================================
+    
+    match /sosEvents/{eventId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+    }
+    
+    // ================================
+    // COMMUNITY STATS (Read-only aggregate)
+    // ================================
+    
+    match /communityStats/{docId} {
+      // Anyone authenticated can read community-wide stats
+      allow read: if isAuthenticated();
+      
+      // Allow authenticated users to write (for client-side caching)
+      // In production, this should be Cloud Functions only
+      allow write: if isAuthenticated();
+    }
+  }
+}

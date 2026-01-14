@@ -54,6 +54,10 @@ import SocialScreen from '../screens/SocialScreen';
 import ReasonsScreen from '../screens/ReasonsScreen';
 import BreathingExerciseScreen from '../screens/BreathingExerciseScreen';
 import JournalScreen from '../screens/JournalScreen';
+import InnerCircleScreen from '../screens/InnerCircleScreen';
+import EmergencyCallScreen from '../screens/EmergencyCallScreen';
+import DistractMeScreen from '../screens/DistractMeScreen';
+import AlternativesScreen from '../screens/AlternativesScreen';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const OnboardingStack = createNativeStackNavigator<OnboardingStackParamList>();
@@ -112,6 +116,18 @@ function MainTabNavigator() {
                 component={PanicScreen}
                 options={{
                     tabBarLabel: '',
+                    tabBarStyle: {
+                        backgroundColor: 'rgba(15, 15, 30, 0.98)',
+                        borderTopColor: 'rgba(255, 255, 255, 0.1)',
+                        borderTopWidth: 1,
+                        paddingTop: 6,
+                        paddingBottom: Platform.OS === 'ios' ? 22 : 8,
+                        height: Platform.OS === 'ios' ? 80 : 60,
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                    },
                     tabBarIcon: ({ focused }) => (
                         <View style={{
                             alignItems: 'center',
@@ -137,7 +153,7 @@ function MainTabNavigator() {
                             <Text style={{
                                 fontSize: 7,
                                 fontWeight: '600',
-                                color: focused ? '#EF4444' : '#6B7280',
+                                color: focused ? '#EF4444' : '#E8E8F0',
                                 marginTop: 4,
                                 letterSpacing: -0.5,
                             }}>CRAVING</Text>
@@ -179,13 +195,16 @@ function LoadingScreen() {
     );
 }
 
-// Root Navigation - For testing, always show all screens
+// Root Navigation - Shows appropriate flow based on auth state
 export default function RootNavigator() {
-    const { isLoading } = useAuthContext();
+    const { isLoading, isAuthenticated } = useAuthContext();
 
     if (isLoading) {
         return <LoadingScreen />;
     }
+
+    // If authenticated, skip onboarding and auth screens
+    const initialRouteName = isAuthenticated ? 'Main' : 'Onboarding';
 
     return (
         <NavigationContainer>
@@ -193,7 +212,7 @@ export default function RootNavigator() {
                 screenOptions={{
                     headerShown: false,
                 }}
-                initialRouteName="Onboarding"
+                initialRouteName={initialRouteName}
             >
                 {/* Onboarding Flow */}
                 <RootStack.Screen name="Onboarding">
@@ -267,6 +286,38 @@ export default function RootNavigator() {
                     options={{
                         presentation: 'modal',
                         animation: 'slide_from_bottom',
+                    }}
+                />
+                <RootStack.Screen
+                    name="InnerCircle"
+                    component={InnerCircleScreen}
+                    options={{
+                        presentation: 'fullScreenModal',
+                        animation: 'fade',
+                    }}
+                />
+                <RootStack.Screen
+                    name="EmergencyCall"
+                    component={EmergencyCallScreen}
+                    options={{
+                        presentation: 'fullScreenModal',
+                        animation: 'fade',
+                    }}
+                />
+                <RootStack.Screen
+                    name="DistractMe"
+                    component={DistractMeScreen}
+                    options={{
+                        presentation: 'fullScreenModal',
+                        animation: 'fade',
+                    }}
+                />
+                <RootStack.Screen
+                    name="Alternatives"
+                    component={AlternativesScreen}
+                    options={{
+                        presentation: 'fullScreenModal',
+                        animation: 'fade',
                     }}
                 />
                 <RootStack.Screen

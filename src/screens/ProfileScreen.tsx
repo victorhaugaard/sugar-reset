@@ -31,6 +31,7 @@ import { useAuthContext } from '../context/AuthContext';
 import { useAuth } from '../hooks/useAuth';
 import { AppIcon } from '../components/OnboardingIcon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { seedDatabase, testFirestoreConnection } from '../utils/seedDatabase';
 
 interface MenuItem {
     id: string;
@@ -70,6 +71,13 @@ const menuSections = [
         items: [
             { id: 'privacy', emoji: '🔒', label: 'Privacy Policy' },
             { id: 'terms', emoji: '📄', label: 'Terms of Service' },
+        ],
+    },
+    {
+        title: 'Developer',
+        items: [
+            { id: 'seed_db', emoji: '🌱', label: 'Seed Test Data' },
+            { id: 'test_connection', emoji: '🔌', label: 'Test Firestore' },
         ],
     },
 ];
@@ -386,7 +394,39 @@ export default function ProfileScreen() {
                                                             ? handleEditProfile
                                                             : item.id === 'journal'
                                                                 ? () => navigation.navigate('Journal')
-                                                                : undefined
+                                                                : item.id === 'seed_db'
+                                                                    ? async () => {
+                                                                        if (!user) {
+                                                                            Alert.alert('Error', 'You must be logged in');
+                                                                            return;
+                                                                        }
+                                                                        Alert.alert(
+                                                                            'Seed Database',
+                                                                            'This will create sample posts, users, and stats for testing. Continue?',
+                                                                            [
+                                                                                { text: 'Cancel', style: 'cancel' },
+                                                                                {
+                                                                                    text: 'Seed',
+                                                                                    onPress: async () => {
+                                                                                        const result = await seedDatabase(user.id);
+                                                                                        Alert.alert(
+                                                                                            result.success ? 'Success!' : 'Error',
+                                                                                            result.success ? 'Database seeded with test data. Refresh the Social tab!' : 'Failed to seed database'
+                                                                                        );
+                                                                                    }
+                                                                                }
+                                                                            ]
+                                                                        );
+                                                                    }
+                                                                    : item.id === 'test_connection'
+                                                                        ? async () => {
+                                                                            const connected = await testFirestoreConnection();
+                                                                            Alert.alert(
+                                                                                connected ? 'Connected!' : 'Connection Failed',
+                                                                                connected ? 'Firestore is working correctly' : 'Check your network and Firebase config'
+                                                                            );
+                                                                        }
+                                                                        : undefined
                                             }
                                         >
                                             <AppIcon emoji={item.emoji} size={20} />

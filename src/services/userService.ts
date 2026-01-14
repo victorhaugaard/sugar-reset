@@ -19,7 +19,7 @@ import {
     limit,
     addDoc,
 } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db, isFirebaseReady } from '../config/firebase';
 import { User, UserStats, UserPreferences, StreakData, DailyCheckIn, Friend } from '../types';
 
 /**
@@ -30,35 +30,66 @@ const toDate = (timestamp: Timestamp | null): Date | null => {
 };
 
 /**
+ * Helper to handle Firestore errors gracefully
+ */
+const handleFirestoreError = (error: any, operation: string): null => {
+    if (error?.code === 'unavailable' || error?.message?.includes('offline')) {
+        console.log(`📴 Firestore offline for: ${operation}`);
+    } else if (!isFirebaseReady()) {
+        // Don't log if Firebase isn't configured - expected behavior
+    } else {
+        console.warn(`⚠️ ${operation} failed:`, error?.code || error?.message);
+    }
+    return null;
+};
+
+/**
  * User profile operations
  */
 export const userService = {
     /**
-     * Get user profile by ID
+     * Get user profile by ID with retry logic
      */
-    async getUserProfile(userId: string): Promise<User | null> {
-        const docRef = doc(db, 'users', userId);
-        const docSnap = await getDoc(docRef);
-
-        if (!docSnap.exists()) {
+    async getUserProfile(userId: string, retryCount = 0): Promise<User | null> {
+        if (!isFirebaseReady()) {
+            console.log('📴 Firebase not ready, skipping getUserProfile');
             return null;
         }
+        
+        try {
+            console.log(`📖 Fetching user profile for: ${userId} (attempt ${retryCount + 1})`);
+            const docRef = doc(db, 'users', userId);
+            const docSnap = await getDoc(docRef);
+            console.log('✅ User profile fetch completed, exists:', docSnap.exists());
 
-        const data = docSnap.data();
-        return {
-            id: docSnap.id,
-            email: data.email,
-            displayName: data.displayName,
-            photoURL: data.photoURL,
-            createdAt: toDate(data.createdAt) as Date,
-            updatedAt: toDate(data.updatedAt) as Date,
-            preferences: data.preferences,
-            streak: {
-                ...data.streak,
-                lastCheckIn: toDate(data.streak?.lastCheckIn),
-                startDate: toDate(data.streak?.startDate) as Date,
-            },
-        };
+            if (!docSnap.exists()) {
+                return null;
+            }
+
+            const data = docSnap.data();
+            return {
+                id: docSnap.id,
+                email: data.email,
+                displayName: data.displayName,
+                photoURL: data.photoURL,
+                createdAt: toDate(data.createdAt) as Date,
+                updatedAt: toDate(data.updatedAt) as Date,
+                preferences: data.preferences,
+                streak: {
+                    ...data.streak,
+                    lastCheckIn: toDate(data.streak?.lastCheckIn),
+                    startDate: toDate(data.streak?.startDate) as Date,
+                },
+            };
+        } catch (error: any) {
+            // Retry once on network errors
+            if (retryCount < 1 && (error?.code === 'unavailable' || error?.message?.includes('offline'))) {
+                console.log('🔄 Retrying getUserProfile after network error...');
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                return this.getUserProfile(userId, retryCount + 1);
+            }
+            return handleFirestoreError(error, 'getUserProfile');
+        }
     },
 
     /**
@@ -68,43 +99,50 @@ export const userService = {
         userId: string,
         email: string,
         displayName?: string
-    ): Promise<User> {
-        const now = new Date();
-        const defaultPreferences: UserPreferences = {
-            notifications: true,
-            dailyReminderTime: '09:00',
-            weeklyReportDay: 0,
-            theme: 'dark',
-        };
+    ): Promise<User | null> {
+        if (!isFirebaseReady()) return null;
+        
+        try {
+            const now = new Date();
+            const defaultPreferences: UserPreferences = {
+                notifications: true,
+                dailyReminderTime: '09:00',
+                weeklyReportDay: 0,
+                theme: 'dark',
+            };
 
-        const defaultStreak: StreakData = {
-            currentStreak: 0,
-            longestStreak: 0,
-            lastCheckIn: null,
-            startDate: now,
-            totalDaysSugarFree: 0,
-        };
+            const defaultStreak: StreakData = {
+                currentStreak: 0,
+                longestStreak: 0,
+                lastCheckIn: null,
+                startDate: now,
+                totalDaysSugarFree: 0,
+            };
 
-        const newUser: Omit<User, 'id'> = {
-            email,
-            displayName,
-            createdAt: now,
-            updatedAt: now,
-            preferences: defaultPreferences,
-            streak: defaultStreak,
-        };
+            const newUser: Omit<User, 'id'> = {
+                email,
+                displayName,
+                createdAt: now,
+                updatedAt: now,
+                preferences: defaultPreferences,
+                streak: defaultStreak,
+            };
 
-        await setDoc(doc(db, 'users', userId), {
-            ...newUser,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            streak: {
-                ...defaultStreak,
-                startDate: serverTimestamp(),
-            },
-        });
+            await setDoc(doc(db, 'users', userId), {
+                ...newUser,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                streak: {
+                    ...defaultStreak,
+                    startDate: serverTimestamp(),
+                },
+            });
 
-        return { id: userId, ...newUser };
+            return { id: userId, ...newUser };
+        } catch (error) {
+            handleFirestoreError(error, 'createUserProfile');
+            return null;
+        }
     },
 
     /**

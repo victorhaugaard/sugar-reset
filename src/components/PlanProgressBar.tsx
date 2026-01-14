@@ -7,8 +7,9 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { spacing } from '../theme';
+import { spacing, borderRadius } from '../theme';
 import { looviColors } from './LooviBackground';
+import { GlassCard } from './GlassCard';
 
 // Phase definitions based on plan progress
 const PHASES = [
@@ -70,97 +71,101 @@ export function PlanProgressBar({
         : '';
 
     return (
-        <View style={styles.container}>
+        <GlassCard variant="light" style={styles.container}>
+            {/* Header Label */}
+            <Text style={styles.headerLabel}>Habit Formation Progress</Text>
+
+            {/* Phase Title - Above Progress Bar */}
+            <Text style={styles.phaseTitle}>{currentPhase.name}</Text>
+
             {/* Progress Bar */}
-            <View style={styles.progressContainer}>
-                <Text style={styles.percentText}>{progressPercent}%</Text>
-                <View style={styles.progressTrack}>
-                    <View
-                        style={[
-                            styles.progressFill,
-                            { width: `${progressPercent}%` }
-                        ]}
-                    />
-                </View>
+            <View style={styles.progressTrack}>
+                <View
+                    style={[
+                        styles.progressFill,
+                        { width: `${progressPercent}%` }
+                    ]}
+                />
             </View>
 
-            {/* Phase Labels Row */}
-            <View style={styles.phaseLabelsRow}>
-                <Text style={styles.phaseLabel}>{currentPhase.name}</Text>
+            {/* Progress Percentage and End Date - Below Progress Bar */}
+            <View style={styles.progressLabelsRow}>
+                <Text style={styles.percentText}>{progressPercent}%</Text>
                 {endDateFormatted && (
-                    <Text style={styles.endDateLabel}>Complete at {endDateFormatted}</Text>
+                    <Text style={styles.endDateLabel}>Complete by {endDateFormatted}</Text>
                 )}
             </View>
 
-            {/* Phase Description */}
-            <View style={styles.phaseDescription}>
-                <Text style={styles.phaseDescriptionText}>
-                    You are now probably {currentPhase.feeling}.
-                </Text>
-                <Text style={styles.phaseDescriptionText}>
-                    At the end of this phase, {currentPhase.endFeeling}.
-                </Text>
-            </View>
-        </View>
+            {/* Phase Description - Compact single line */}
+            <Text style={styles.phaseHint}>
+                {currentPhase.feeling.charAt(0).toUpperCase() + currentPhase.feeling.slice(1)} → {currentPhase.endFeeling}
+            </Text>
+        </GlassCard>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         paddingHorizontal: spacing.screen.horizontal,
-        paddingVertical: spacing.md,
+        paddingTop: spacing.xs,
+        paddingBottom: spacing.sm,
     },
-    progressContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.md,
+    headerLabel: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: looviColors.text.tertiary,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        marginBottom: spacing.xs,
     },
-    percentText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-        minWidth: 45,
+    phaseTitle: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: looviColors.accent.primary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: spacing.xs,
+        textShadowColor: 'rgba(217, 123, 102, 0.25)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
     },
     progressTrack: {
-        flex: 1,
-        height: 12,
+        height: 10,
         backgroundColor: 'rgba(0,0,0,0.08)',
-        borderRadius: 6,
+        borderRadius: 5,
         overflow: 'hidden',
     },
     progressFill: {
         height: '100%',
         backgroundColor: looviColors.coralOrange,
-        borderRadius: 6,
+        borderRadius: 5,
     },
-    phaseLabelsRow: {
+    progressLabelsRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginTop: spacing.sm,
+        marginTop: 4,
     },
-    phaseLabel: {
+    percentText: {
         fontSize: 12,
         fontWeight: '600',
-        color: looviColors.text.secondary,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
+        color: looviColors.accent.primary,
+        textShadowColor: 'rgba(217, 123, 102, 0.2)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
     },
     endDateLabel: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '500',
         color: looviColors.text.tertiary,
     },
-    phaseDescription: {
-        marginTop: spacing.sm,
-        alignItems: 'center',
-    },
-    phaseDescriptionText: {
-        fontSize: 13,
+    phaseHint: {
+        fontSize: 12,
         fontWeight: '500',
         color: looviColors.text.secondary,
-        textAlign: 'center',
         fontStyle: 'italic',
-        lineHeight: 20,
+        marginTop: spacing.sm,
+        textAlign: 'center',
+        alignSelf: 'center',
     },
 });
 

@@ -89,29 +89,29 @@ export function WellnessTracker({ averages }: WellnessTrackerProps) {
                 <MetricBar
                     label="Energy"
                     iconName="flash-outline"
-                    iconColor={looviColors.accent.warning}
+                    iconColor={looviColors.coralOrange}
                     value={energyPercent}
                     displayValue={averages.energy.toFixed(1)}
-                    color={looviColors.accent.warning}
-                    bgColor={`${looviColors.accent.warning}15`}
+                    color={looviColors.coralOrange}
+                    bgColor={`${looviColors.coralOrange}15`}
                 />
                 <MetricBar
                     label="Focus"
                     iconName="bulb-outline"
-                    iconColor="#8B5CF6"
+                    iconColor={looviColors.coralDark}
                     value={focusPercent}
                     displayValue={averages.focus.toFixed(1)}
-                    color="#8B5CF6"
-                    bgColor="rgba(139, 92, 246, 0.15)"
+                    color={looviColors.coralDark}
+                    bgColor={`${looviColors.coralDark}15`}
                 />
                 <MetricBar
                     label="Sleep"
                     iconName="bed-outline"
-                    iconColor={looviColors.accent.success}
+                    iconColor={looviColors.skyBlueDark}
                     value={sleepPercent}
                     displayValue={`${averages.sleep.toFixed(1)}h`}
-                    color={looviColors.accent.success}
-                    bgColor={`${looviColors.accent.success}15`}
+                    color={looviColors.skyBlueDark}
+                    bgColor={`${looviColors.skyBlueDark}15`}
                 />
             </View>
         </GlassCard>

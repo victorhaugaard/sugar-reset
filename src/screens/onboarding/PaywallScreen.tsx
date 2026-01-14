@@ -60,10 +60,11 @@ export default function PaywallScreen({ navigation }: PaywallScreenProps) {
     const [selectedPlan, setSelectedPlan] = useState('yearly');
 
     const handleSubscribe = () => {
-        // TODO: Implement subscription
+        // Navigate to signup to create account
+        // After signup, auth state change will navigate to Main
         navigation.getParent()?.reset({
             index: 0,
-            routes: [{ name: 'Main' }],
+            routes: [{ name: 'Auth', params: { screen: 'SignUp' } }],
         });
     };
 
@@ -72,9 +73,10 @@ export default function PaywallScreen({ navigation }: PaywallScreenProps) {
     };
 
     const handleSkip = () => {
+        // Still need to create account even when skipping paywall
         navigation.getParent()?.reset({
             index: 0,
-            routes: [{ name: 'Main' }],
+            routes: [{ name: 'Auth', params: { screen: 'SignUp' } }],
         });
     };
 

@@ -15,7 +15,6 @@ import {
     StyleSheet,
     TouchableOpacity,
     ScrollView,
-    Alert,
     Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -41,200 +40,9 @@ import {
 } from '../services/scannerService';
 import { useUserData, JournalEntry } from '../context/UserDataContext';
 import { SwipeableTabView } from '../components/SwipeableTabView';
-import { healthService } from '../services/healthService';
+import { WellnessModal, WellnessLog } from '../components/WellnessModal';
 
 const WELLNESS_LOGS_KEY = 'wellness_logs';
-
-interface WellnessLog {
-    date: string;
-    mood: number;
-    energy: number;
-    focus: number;
-    sleepHours: number;
-}
-
-// Wellness Modal Component
-function WellnessModal({
-    visible,
-    onClose,
-    onSave,
-    selectedDate,
-    existingData
-}: {
-    visible: boolean;
-    onClose: () => void;
-    onSave: (log: WellnessLog) => void;
-    selectedDate: string;
-    existingData?: WellnessLog | null;
-}) {
-    const [mood, setMood] = useState(3);
-    const [energy, setEnergy] = useState(3);
-    const [focus, setFocus] = useState(3);
-    const [sleepHours, setSleepHours] = useState(7);
-
-    // Reset or prefill values when modal opens
-    useEffect(() => {
-        if (visible) {
-            if (existingData) {
-                // Editing existing data - prefill with existing values
-                setMood(existingData.mood);
-                setEnergy(existingData.energy);
-                setFocus(existingData.focus);
-                setSleepHours(existingData.sleepHours);
-            } else {
-                // Adding new data - reset to defaults
-                setMood(3);
-                setEnergy(3);
-                setFocus(3);
-                setSleepHours(7);
-            }
-        }
-    }, [visible, existingData]);
-
-    const handleSave = () => {
-        onSave({
-            date: selectedDate,
-            mood,
-            energy,
-            focus,
-            sleepHours,
-        });
-        onClose();
-    };
-
-    const isToday = selectedDate === new Date().toISOString().split('T')[0];
-    const isFutureDate = selectedDate > new Date().toISOString().split('T')[0];
-    const dateFormatted = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-    });
-
-    // Generate sleep hour options (4 to 11 in 0.5 increments)
-    const sleepOptions: number[] = [];
-    for (let h = 4; h <= 11; h += 0.5) {
-        sleepOptions.push(h);
-    }
-
-    const ScaleSelector = ({
-        label,
-        value,
-        onChange,
-        iconName
-    }: {
-        label: string;
-        value: number;
-        onChange: (v: number) => void;
-        iconName: keyof typeof Ionicons.glyphMap;
-    }) => (
-        <View style={wellnessStyles.scaleContainer}>
-            <View style={wellnessStyles.scaleHeader}>
-                <Ionicons name={iconName} size={20} color={looviColors.accent.primary} style={wellnessStyles.scaleIcon} />
-                <Text style={wellnessStyles.scaleLabel}>{label}</Text>
-            </View>
-            <View style={wellnessStyles.scaleButtons}>
-                {[1, 2, 3, 4, 5].map(n => (
-                    <TouchableOpacity
-                        key={n}
-                        style={[
-                            wellnessStyles.scaleButton,
-                            value === n && wellnessStyles.scaleButtonActive
-                        ]}
-                        onPress={() => onChange(n)}
-                    >
-                        <Text style={[
-                            wellnessStyles.scaleButtonText,
-                            value === n && wellnessStyles.scaleButtonTextActive
-                        ]}>{n}</Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-        </View>
-    );
-
-    if (!visible) return null;
-
-    return (
-        <View style={wellnessStyles.overlay}>
-            <View style={wellnessStyles.modal}>
-                <TouchableOpacity style={wellnessStyles.closeButton} onPress={onClose}>
-                    <Text style={wellnessStyles.closeText}>✕</Text>
-                </TouchableOpacity>
-
-                <Text style={wellnessStyles.title}>How are you feeling?</Text>
-                <Text style={wellnessStyles.subtitle}>
-                    {isFutureDate
-                        ? "⚠️ Can't log for future dates"
-                        : isToday
-                            ? 'Rate your wellness today'
-                            : `Logging for ${dateFormatted}`}
-                </Text>
-
-                <ScrollView showsVerticalScrollIndicator={false}>
-                    <ScaleSelector label="Mood" value={mood} onChange={setMood} iconName="happy-outline" />
-                    <ScaleSelector label="Energy" value={energy} onChange={setEnergy} iconName="flash-outline" />
-                    <ScaleSelector label="Focus" value={focus} onChange={setFocus} iconName="bulb-outline" />
-
-                    <View style={wellnessStyles.sleepSection}>
-                        <View style={wellnessStyles.sleepHeader}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Ionicons name="bed-outline" size={20} color={looviColors.accent.primary} style={wellnessStyles.scaleIcon} />
-                                <Text style={wellnessStyles.scaleLabel}>Hours of Sleep</Text>
-                            </View>
-                            <TouchableOpacity
-                                onPress={async () => {
-                                    try {
-                                        const sleepHrs = await healthService.getTodaySleep();
-                                        if (sleepHrs > 0) {
-                                            const rounded = Math.round(sleepHrs * 2) / 2;
-                                            setSleepHours(rounded);
-                                            Alert.alert('Synced', `Updated sleep to ${rounded} hours from Health data.`);
-                                        } else {
-                                            Alert.alert('No Data', 'No sleep data found in Health app.');
-                                        }
-                                    } catch (e) {
-                                        Alert.alert('Error', 'Failed to sync from Health.');
-                                    }
-                                }}
-                                style={wellnessStyles.syncButton}
-                            >
-                                <Feather name="refresh-cw" size={12} color={looviColors.accent.primary} />
-                                <Text style={wellnessStyles.syncButtonText}>Sync Health</Text>
-                            </TouchableOpacity>
-                        </View>
-                        <View style={wellnessStyles.sleepButtons}>
-                            {sleepOptions.map(h => (
-                                <TouchableOpacity
-                                    key={h}
-                                    style={[
-                                        wellnessStyles.sleepButton,
-                                        sleepHours === h && wellnessStyles.sleepButtonActive
-                                    ]}
-                                    onPress={() => setSleepHours(h)}
-                                >
-                                    <Text style={[
-                                        wellnessStyles.sleepButtonText,
-                                        sleepHours === h && wellnessStyles.sleepButtonTextActive
-                                    ]}>{h % 1 === 0 ? `${h}h` : `${h}`}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </View>
-                </ScrollView>
-
-                <TouchableOpacity
-                    style={[wellnessStyles.saveButton, isFutureDate && wellnessStyles.saveButtonDisabled]}
-                    onPress={handleSave}
-                    disabled={isFutureDate}
-                >
-                    <Text style={wellnessStyles.saveButtonText}>
-                        {isFutureDate ? "Can't Save Future Data" : 'Save How I\'m Feeling'}
-                    </Text>
-                </TouchableOpacity>
-            </View>
-        </View>
-    );
-}
 
 export default function TrackingScreen() {
     const route = useRoute<any>();
@@ -388,49 +196,43 @@ export default function TrackingScreen() {
                             <TouchableOpacity
                                 style={styles.actionButton}
                                 onPress={() => {
-                                    // Set date to today then open scanner
                                     handleDateSelect(todayStr);
                                     setShowScannerModal(true);
                                 }}
-                                activeOpacity={0.8}
+                                activeOpacity={0.7}
                             >
-                                <GlassCard variant="light" padding="lg" style={styles.actionCard}>
-                                    <View style={styles.actionIconContainer}>
-                                        <Ionicons name="nutrition" size={40} color={looviColors.accent.primary} />
-                                        {todayFoods.length > 0 && (
-                                            <View style={[styles.loggedBadge, { backgroundColor: todaySugarTotal > 50 ? '#EF4444' : '#22C55E' }]}>
-                                                <Text style={styles.sugarBadgeText}>{Math.round(todaySugarTotal)}g</Text>
-                                            </View>
-                                        )}
+                                <View style={styles.modernButton}>
+                                    <View style={styles.buttonIconCircle}>
+                                        <Ionicons name="restaurant-outline" size={28} color="#FFFFFF" />
                                     </View>
-                                    <Text style={styles.actionTitle}>What have you eaten?</Text>
-                                    <Text style={styles.actionSubtitle}>Scan or log your food</Text>
-                                </GlassCard>
+                                    <Text style={styles.buttonText}>Log Food</Text>
+                                    {todayFoods.length > 0 && (
+                                        <View style={styles.buttonBadge}>
+                                            <Text style={styles.buttonBadgeText}>{todayFoods.length}</Text>
+                                        </View>
+                                    )}
+                                </View>
                             </TouchableOpacity>
 
                             <TouchableOpacity
                                 style={styles.actionButton}
                                 onPress={() => {
-                                    // Select today, then open wellness modal for today
                                     handleDateSelect(todayStr);
                                     setShowWellnessModal(true);
                                 }}
-                                activeOpacity={0.8}
+                                activeOpacity={0.7}
                             >
-                                <GlassCard variant="light" padding="lg" style={styles.actionCard}>
-                                    <View style={styles.actionIconContainer}>
-                                        <Ionicons name="fitness" size={40} color={looviColors.accent.primary} />
-                                        {wellnessDates.includes(todayStr) && (
-                                            <View style={styles.loggedBadge}>
-                                                <Ionicons name="checkmark" size={12} color="#FFFFFF" />
-                                            </View>
-                                        )}
+                                <View style={[styles.modernButton, { backgroundColor: 'rgba(127, 176, 105, 0.7)' }]}>
+                                    <View style={styles.buttonIconCircle}>
+                                        <Ionicons name="heart-outline" size={28} color="#FFFFFF" />
                                     </View>
-                                    <Text style={styles.actionTitle}>How are you feeling?</Text>
-                                    <Text style={styles.actionSubtitle}>
-                                        {wellnessDates.includes(todayStr) ? "Edit today's wellness" : "Log today's wellness"}
-                                    </Text>
-                                </GlassCard>
+                                    <Text style={styles.buttonText}>Wellness</Text>
+                                    {wellnessDates.includes(todayStr) && (
+                                        <View style={[styles.buttonBadge, { backgroundColor: looviColors.accent.success }]}>
+                                            <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                                        </View>
+                                    )}
+                                </View>
                             </TouchableOpacity>
                         </View>
 
@@ -639,157 +441,6 @@ export default function TrackingScreen() {
     );
 }
 
-// Wellness Modal Styles
-const wellnessStyles = StyleSheet.create({
-    overlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 1000,
-    },
-    modal: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: borderRadius['2xl'],
-        padding: spacing.xl,
-        width: '90%',
-        maxWidth: 400,
-        maxHeight: '80%',
-    },
-    closeButton: {
-        position: 'absolute',
-        top: spacing.md,
-        right: spacing.md,
-        width: 32,
-        height: 32,
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 10,
-    },
-    closeText: {
-        fontSize: 20,
-        color: looviColors.text.tertiary,
-    },
-    title: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-        textAlign: 'center',
-        marginBottom: spacing.xs,
-    },
-    subtitle: {
-        fontSize: 14,
-        fontWeight: '400',
-        color: looviColors.text.secondary,
-        textAlign: 'center',
-        marginBottom: spacing.xl,
-    },
-    scaleContainer: {
-        marginBottom: spacing.lg,
-    },
-    scaleHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: spacing.sm,
-    },
-    scaleIcon: {
-        marginRight: spacing.sm,
-    },
-    scaleLabel: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: looviColors.text.primary,
-    },
-    scaleButtons: {
-        flexDirection: 'row',
-        gap: spacing.sm,
-    },
-    scaleButton: {
-        flex: 1,
-        paddingVertical: 12,
-        borderRadius: borderRadius.lg,
-        backgroundColor: 'rgba(0, 0, 0, 0.05)',
-        alignItems: 'center',
-    },
-    scaleButtonActive: {
-        backgroundColor: looviColors.accent.primary,
-    },
-    scaleButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: looviColors.text.secondary,
-    },
-    scaleButtonTextActive: {
-        color: '#FFFFFF',
-    },
-    sleepSection: {
-        marginBottom: spacing.lg,
-    },
-    sleepHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: spacing.sm,
-    },
-    syncButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        backgroundColor: 'rgba(0,0,0,0.05)',
-        borderRadius: 12,
-    },
-    syncButtonText: {
-        fontSize: 10,
-        color: looviColors.accent.primary,
-        fontWeight: '600',
-    },
-    sleepButtons: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.sm,
-        marginTop: spacing.sm,
-    },
-    sleepButton: {
-        paddingVertical: 10,
-        paddingHorizontal: 16,
-        borderRadius: borderRadius.lg,
-        backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    },
-    sleepButtonActive: {
-        backgroundColor: looviColors.accent.primary,
-    },
-    sleepButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: looviColors.text.secondary,
-    },
-    sleepButtonTextActive: {
-        color: '#FFFFFF',
-    },
-    saveButton: {
-        backgroundColor: looviColors.accent.primary,
-        paddingVertical: 14,
-        borderRadius: borderRadius.xl,
-        alignItems: 'center',
-        marginTop: spacing.md,
-    },
-    saveButtonDisabled: {
-        backgroundColor: looviColors.text.muted,
-        opacity: 0.6,
-    },
-    saveButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#FFFFFF',
-    },
-});
-
 // Main Styles
 const styles = StyleSheet.create({
     container: {
@@ -826,44 +477,45 @@ const styles = StyleSheet.create({
     actionButton: {
         flex: 1,
     },
-    actionCard: {
+    modernButton: {
+        backgroundColor: 'rgba(217, 123, 102, 0.75)',
+        borderRadius: 20,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.md,
         alignItems: 'center',
-        minHeight: 140,
         justifyContent: 'center',
-    },
-    actionTitle: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-        marginTop: spacing.sm,
-        textAlign: 'center',
-    },
-    actionSubtitle: {
-        fontSize: 12,
-        fontWeight: '400',
-        color: looviColors.text.tertiary,
-        marginTop: 2,
-        textAlign: 'center',
-    },
-    actionIconContainer: {
+        shadowColor: looviColors.accent.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 5,
         position: 'relative',
+        minHeight: 80,
     },
-    loggedBadge: {
+    buttonIconCircle: {
+        marginBottom: spacing.xs,
+    },
+    buttonText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
+    buttonBadge: {
         position: 'absolute',
-        top: -6,
-        right: -6,
+        top: 8,
+        right: 8,
         minWidth: 24,
         height: 24,
         paddingHorizontal: 6,
         borderRadius: 12,
-        backgroundColor: looviColors.accent.success,
+        backgroundColor: looviColors.accent.warning,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 2,
         borderColor: '#FFFFFF',
     },
-    sugarBadgeText: {
-        fontSize: 10,
+    buttonBadgeText: {
+        fontSize: 11,
         fontWeight: '700',
         color: '#FFFFFF',
     },

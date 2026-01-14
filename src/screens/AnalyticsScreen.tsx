@@ -1,13 +1,12 @@
 /**
  * AnalyticsScreen
  * 
- * Redesigned analytics page with:
- * - Timeframe toggle (7 days, 1 month, all time)
- * - Overall health score ring
- * - Sugar consumption graph
- * - Nutrition section (placeholder)
- * - Qualitative advice
- * - CTA buttons
+ * Redesigned analytics page focused on INSIGHTS over raw data:
+ * - Overall health score with clickable explanations
+ * - Actionable insights based on user's data
+ * - Food scanner modal opens directly from CTA
+ * - Wellness-nutrition correlation insights
+ * - Visual, scannable design
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -20,28 +19,24 @@ import {
     LayoutAnimation,
     Platform,
     UIManager,
+    Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import { spacing, borderRadius } from '../theme';
 import LooviBackground, { looviColors } from '../components/LooviBackground';
 import { GlassCard } from '../components/GlassCard';
 import { useUserData } from '../context/UserDataContext';
 import { TimeframeToggle, Timeframe } from '../components/TimeframeToggle';
 import { HealthScoreRing } from '../components/HealthScoreRing';
-import { HealthScoreTrend } from '../components/HealthScoreTrend';
-import { SugarConsumptionTrend } from '../components/SugarConsumptionTrend';
 import { SwipeableTabView } from '../components/SwipeableTabView';
-import JournalEntryModal from '../components/JournalEntryModal';
-import { PlanType } from '../utils/planUtils';
-import { AppIcon } from '../components/OnboardingIcon';
+import FoodScannerModal from '../components/FoodScannerModal';
+import { WellnessModal, WellnessLog } from '../components/WellnessModal';
 import { getScannedItems, ScannedItem } from '../services/scannerService';
 import {
     aggregateHealthData,
-    calculateComprehensiveScore,
-    DailyNutritionProfile,
     WellnessMetrics,
     getNutritionInsights,
 } from '../services/healthScoringService';
@@ -51,7 +46,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-interface WellnessLog {
+interface WellnessLogData {
     date: string;
     mood: number;
     energy: number;
@@ -59,22 +54,230 @@ interface WellnessLog {
     sleepHours: number;
 }
 
+// Score info content
+const SCORE_INFO = {
+    overall: {
+        title: 'Overall Health Score',
+        description: 'Your overall score combines nutrition quality and wellness metrics to give you a complete picture of your health.',
+        ranges: [
+            { min: 80, max: 100, label: 'Excellent', color: '#22C55E', tip: 'You\'re doing great! Keep up the healthy habits.' },
+            { min: 60, max: 79, label: 'Good', color: '#F5B461', tip: 'Good progress! Focus on consistency to improve further.' },
+            { min: 40, max: 59, label: 'Fair', color: '#F59E0B', tip: 'Room for improvement. Try logging meals and tracking wellness daily.' },
+            { min: 0, max: 39, label: 'Needs Work', color: '#EF4444', tip: 'Start with small changes - reduce sugar intake and improve sleep.' },
+        ],
+        howToImprove: [
+            'Log your meals daily to track nutrition',
+            'Aim for less than 25g of added sugar per day',
+            'Track your mood, energy, and sleep consistently',
+            'Get 7-9 hours of sleep each night',
+        ],
+    },
+    nutrition: {
+        title: 'Nutrition Score',
+        description: 'Based on the nutritional quality of foods you\'ve logged, including sugar content, fiber, protein, and overall balance.',
+        ranges: [
+            { min: 80, max: 100, label: 'Excellent', color: '#22C55E', tip: 'Great food choices! Your diet is well-balanced.' },
+            { min: 60, max: 79, label: 'Good', color: '#F5B461', tip: 'Good nutrition. Watch your sugar intake for even better scores.' },
+            { min: 40, max: 59, label: 'Fair', color: '#F59E0B', tip: 'Try adding more protein and fiber to your meals.' },
+            { min: 0, max: 39, label: 'Needs Work', color: '#EF4444', tip: 'Focus on reducing processed foods and added sugars.' },
+        ],
+        howToImprove: [
+            'Choose whole foods over processed options',
+            'Include protein with every meal',
+            'Add more vegetables and fiber-rich foods',
+            'Replace sugary snacks with fruit or nuts',
+        ],
+    },
+    wellness: {
+        title: 'Wellness Score',
+        description: 'Calculated from your daily mood, energy, focus, and sleep quality ratings.',
+        ranges: [
+            { min: 80, max: 100, label: 'Excellent', color: '#22C55E', tip: 'You\'re feeling great! Your wellness habits are paying off.' },
+            { min: 60, max: 79, label: 'Good', color: '#F5B461', tip: 'Good overall wellness. Small improvements can make a big difference.' },
+            { min: 40, max: 59, label: 'Fair', color: '#F59E0B', tip: 'Focus on sleep quality and stress management.' },
+            { min: 0, max: 39, label: 'Needs Work', color: '#EF4444', tip: 'Prioritize rest and self-care. Sugar reduction can help improve mood.' },
+        ],
+        howToImprove: [
+            'Maintain a consistent sleep schedule',
+            'Take short breaks for mental clarity',
+            'Exercise regularly for better energy',
+            'Practice mindfulness or meditation',
+        ],
+    },
+};
+
+// Get score color based on value
+const getScoreColor = (score: number): string => {
+    if (score >= 80) return '#22C55E';
+    if (score >= 60) return '#F5B461';
+    if (score >= 40) return '#F59E0B';
+    return '#EF4444';
+};
+
+// Get score label
+const getScoreLabel = (score: number): string => {
+    if (score >= 80) return 'Excellent';
+    if (score >= 60) return 'Good';
+    if (score >= 40) return 'Fair';
+    return 'Needs Work';
+};
+
+// Generate personalized insights based on data
+const generateInsights = (
+    wellnessLogs: WellnessLogData[],
+    scannedItems: ScannedItem[],
+    nutritionInsights: ReturnType<typeof getNutritionInsights> | null
+): { icon: string; iconColor: string; title: string; message: string; action?: string; priority: number }[] => {
+    const insights: { icon: string; iconColor: string; title: string; message: string; action?: string; priority: number }[] = [];
+
+    // No data logged
+    if (wellnessLogs.length === 0 && scannedItems.length === 0) {
+        return [{
+            icon: 'rocket-outline',
+            iconColor: looviColors.accent.primary,
+            title: 'Start Your Journey',
+            message: 'Log your first meal or check-in to unlock personalized insights about your health.',
+            action: 'Log now',
+            priority: 1,
+        }];
+    }
+
+    // Calculate averages
+    const avgMood = wellnessLogs.length > 0 
+        ? wellnessLogs.reduce((sum, log) => sum + log.mood, 0) / wellnessLogs.length 
+        : 0;
+    const avgEnergy = wellnessLogs.length > 0 
+        ? wellnessLogs.reduce((sum, log) => sum + log.energy, 0) / wellnessLogs.length 
+        : 0;
+    const avgSleep = wellnessLogs.length > 0 
+        ? wellnessLogs.reduce((sum, log) => sum + log.sleepHours, 0) / wellnessLogs.length 
+        : 0;
+
+    // Energy insight
+    if (avgEnergy > 0 && avgEnergy < 3) {
+        insights.push({
+            icon: 'flash',
+            iconColor: '#F59E0B',
+            title: 'Low Energy Detected',
+            message: `Your average energy is ${avgEnergy.toFixed(1)}/5. Try eating protein-rich foods like eggs, chicken, or beans to maintain steady energy levels.`,
+            action: 'Foods for energy',
+            priority: 1,
+        });
+    }
+
+    // Sleep insight
+    if (avgSleep > 0 && avgSleep < 7) {
+        insights.push({
+            icon: 'moon',
+            iconColor: '#8B5CF6',
+            title: 'Sleep Could Be Better',
+            message: `You're averaging ${avgSleep.toFixed(1)} hours. Aim for 7-9 hours. Poor sleep increases sugar cravings by up to 45%.`,
+            action: 'Sleep tips',
+            priority: 2,
+        });
+    }
+
+    // Sugar insight
+    if (nutritionInsights && nutritionInsights.avgAddedSugar > 25) {
+        insights.push({
+            icon: 'alert-circle',
+            iconColor: '#EF4444',
+            title: 'Sugar Intake High',
+            message: `You're averaging ${nutritionInsights.avgAddedSugar}g of sugar daily. WHO recommends under 25g for optimal health.`,
+            action: 'Low-sugar alternatives',
+            priority: 1,
+        });
+    } else if (nutritionInsights && nutritionInsights.avgAddedSugar > 0 && nutritionInsights.avgAddedSugar <= 25) {
+        insights.push({
+            icon: 'checkmark-circle',
+            iconColor: '#22C55E',
+            title: 'Great Sugar Control!',
+            message: `Your sugar intake of ${nutritionInsights.avgAddedSugar}g is within healthy limits. Keep it up!`,
+            priority: 3,
+        });
+    }
+
+    // Mood insight
+    if (avgMood > 0 && avgMood < 3) {
+        insights.push({
+            icon: 'sad',
+            iconColor: '#F59E0B',
+            title: 'Mood Needs Attention',
+            message: 'Low mood can trigger sugar cravings. Try a 10-minute walk, call a friend, or write in your journal.',
+            action: 'Mood boosters',
+            priority: 1,
+        });
+    }
+
+    // Protein insight
+    if (nutritionInsights && nutritionInsights.avgProtein < 50) {
+        insights.push({
+            icon: 'fitness',
+            iconColor: '#3B82F6',
+            title: 'Boost Your Protein',
+            message: `At ${nutritionInsights.avgProtein}g daily, adding more protein can help reduce cravings and stabilize energy.`,
+            action: 'High-protein foods',
+            priority: 2,
+        });
+    }
+
+    // Correlation insight - high sugar + low energy
+    if (nutritionInsights && nutritionInsights.avgAddedSugar > 30 && avgEnergy < 3) {
+        insights.push({
+            icon: 'git-compare',
+            iconColor: '#EC4899',
+            title: 'Sugar-Energy Connection',
+            message: 'High sugar intake often causes energy crashes. Your data shows this pattern. Try reducing sugar for steadier energy.',
+            priority: 1,
+        });
+    }
+
+    // Correlation insight - low sleep + low focus
+    if (avgSleep > 0 && avgSleep < 6.5 && wellnessLogs.length > 0) {
+        const avgFocus = wellnessLogs.reduce((sum, log) => sum + log.focus, 0) / wellnessLogs.length;
+        if (avgFocus < 3) {
+            insights.push({
+                icon: 'bulb',
+                iconColor: '#F59E0B',
+                title: 'Sleep Affects Focus',
+                message: 'Your focus tends to be lower when you sleep less. Even one extra hour can improve concentration by 20%.',
+                priority: 2,
+            });
+        }
+    }
+
+    // Positive streak insight
+    if (wellnessLogs.length >= 7) {
+        const recentMood = wellnessLogs.slice(-7).reduce((sum, log) => sum + log.mood, 0) / 7;
+        if (recentMood >= 4) {
+            insights.push({
+                icon: 'trophy',
+                iconColor: '#22C55E',
+                title: 'You\'re on a Roll!',
+                message: 'Your mood has been consistently high this week. Whatever you\'re doing, keep it up!',
+                priority: 3,
+            });
+        }
+    }
+
+    // Sort by priority and return top insights
+    return insights.sort((a, b) => a.priority - b.priority).slice(0, 4);
+};
+
 export default function AnalyticsScreen() {
     const navigation = useNavigation<any>();
     const [timeframe, setTimeframe] = useState<Timeframe>('7d');
-    const [wellnessLogs, setWellnessLogs] = useState<WellnessLog[]>([]);
+    const [wellnessLogs, setWellnessLogs] = useState<WellnessLogData[]>([]);
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
     const [healthScore, setHealthScore] = useState({ overall: 0, nutrition: 0, wellness: 0 });
+    const [prevHealthScore, setPrevHealthScore] = useState({ overall: 0, nutrition: 0, wellness: 0 });
     const [nutritionInsights, setNutritionInsights] = useState<ReturnType<typeof getNutritionInsights> | null>(null);
-    const [trendData, setTrendData] = useState<{ date: string; score: number }[]>([]);
-    const [showJournalModal, setShowJournalModal] = useState(false);
-    const { onboardingData, checkInHistory, recordCheckInForDate, streakData, addJournalEntry } = useUserData();
+    const [showInfoModal, setShowInfoModal] = useState<'overall' | 'nutrition' | 'wellness' | null>(null);
+    const [showFoodScanner, setShowFoodScanner] = useState(false);
+    const [showWellnessModal, setShowWellnessModal] = useState(false);
+    const { onboardingData, addJournalEntry } = useUserData();
 
-    const startDateString = onboardingData.startDate;
-    const startDate = useMemo(() => startDateString ? new Date(startDateString) : new Date(), [startDateString]);
-    const planTypeRaw = (onboardingData.plan || 'cold_turkey') as PlanType;
-
-    // Load wellness logs and food data - reload when screen is focused
+    // Load wellness logs and food data
     useFocusEffect(
         React.useCallback(() => {
             const loadData = async () => {
@@ -103,7 +306,7 @@ export default function AnalyticsScreen() {
         switch (tf) {
             case '7d': return 7;
             case '1m': return 30;
-            case 'all': return 365; // Max 1 year for "all"
+            case 'all': return 365;
         }
     };
 
@@ -111,16 +314,21 @@ export default function AnalyticsScreen() {
         const days = getTimeframeDays(timeframe);
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - days);
-
         return wellnessLogs.filter(log => new Date(log.date) >= cutoff);
     }, [wellnessLogs, timeframe]);
 
-    // Calculate averages for the timeframe
+    const filteredScannedItems = useMemo(() => {
+        const days = getTimeframeDays(timeframe);
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - days);
+        return scannedItems.filter(item => new Date(item.timestamp) >= cutoff);
+    }, [scannedItems, timeframe]);
+
+    // Calculate wellness averages
     const wellnessAverages = useMemo(() => {
         if (filteredWellnessLogs.length === 0) {
             return { mood: 0, energy: 0, focus: 0, sleep: 0 };
         }
-
         const sum = filteredWellnessLogs.reduce(
             (acc, log) => ({
                 mood: acc.mood + log.mood,
@@ -130,7 +338,6 @@ export default function AnalyticsScreen() {
             }),
             { mood: 0, energy: 0, focus: 0, sleep: 0 }
         );
-
         const count = filteredWellnessLogs.length;
         return {
             mood: sum.mood / count,
@@ -140,10 +347,11 @@ export default function AnalyticsScreen() {
         };
     }, [filteredWellnessLogs]);
 
-    // Calculate comprehensive health score and nutrition insights
+    // Calculate health scores
     useEffect(() => {
         const calculateScore = () => {
             const days = getTimeframeDays(timeframe);
+            
             const wellnessMetrics: WellnessMetrics[] = filteredWellnessLogs.map(log => ({
                 mood: log.mood,
                 energy: log.energy,
@@ -151,70 +359,179 @@ export default function AnalyticsScreen() {
                 sleepHours: log.sleepHours,
             }));
 
-            const aggregated = aggregateHealthData(scannedItems, wellnessMetrics, days);
+            const aggregated = aggregateHealthData(filteredScannedItems, wellnessMetrics, days);
             setHealthScore({
                 overall: aggregated.avgOverallScore,
                 nutrition: aggregated.avgNutritionScore,
                 wellness: aggregated.avgWellnessScore,
             });
 
-            // Calculate nutrition insights
-            const insights = getNutritionInsights(scannedItems, days);
+            // Previous period
+            const prevStart = new Date();
+            prevStart.setDate(prevStart.getDate() - (days * 2));
+            const prevEnd = new Date();
+            prevEnd.setDate(prevEnd.getDate() - days);
+
+            const prevWellness = wellnessLogs.filter(log => {
+                const logDate = new Date(log.date);
+                return logDate >= prevStart && logDate < prevEnd;
+            });
+            const prevFood = scannedItems.filter(item => {
+                const itemDate = new Date(item.timestamp);
+                return itemDate >= prevStart && itemDate < prevEnd;
+            });
+
+            const prevMetrics: WellnessMetrics[] = prevWellness.map(log => ({
+                mood: log.mood,
+                energy: log.energy,
+                focus: log.focus,
+                sleepHours: log.sleepHours,
+            }));
+
+            const prevAggregated = aggregateHealthData(prevFood, prevMetrics, days);
+            setPrevHealthScore({
+                overall: prevAggregated.avgOverallScore,
+                nutrition: prevAggregated.avgNutritionScore,
+                wellness: prevAggregated.avgWellnessScore,
+            });
+
+            // Nutrition insights
+            const insights = getNutritionInsights(filteredScannedItems, days);
             setNutritionInsights(insights);
-
-            // Calculate daily trend data
-            const dailyScores: { date: string; score: number }[] = [];
-            const dateMap = new Map<string, { food: ScannedItem[]; wellness: WellnessLog | null }>();
-
-            // Group food by date
-            scannedItems.forEach(item => {
-                const date = item.timestamp.split('T')[0];
-                if (!dateMap.has(date)) {
-                    dateMap.set(date, { food: [], wellness: null });
-                }
-                dateMap.get(date)!.food.push(item);
-            });
-
-            // Add wellness data
-            filteredWellnessLogs.forEach(log => {
-                if (!dateMap.has(log.date)) {
-                    dateMap.set(log.date, { food: [], wellness: null });
-                }
-                dateMap.get(log.date)!.wellness = log;
-            });
-
-            // Calculate score for each day
-            Array.from(dateMap.entries())
-                .sort((a, b) => a[0].localeCompare(b[0]))
-                .forEach(([date, data]) => {
-                    if (data.food.length > 0 || data.wellness) {
-                        const dayWellness = data.wellness ? [{
-                            mood: data.wellness.mood,
-                            energy: data.wellness.energy,
-                            focus: data.wellness.focus,
-                            sleepHours: data.wellness.sleepHours,
-                        }] : [];
-
-                        const dayAggregated = aggregateHealthData(data.food, dayWellness, 1);
-                        dailyScores.push({
-                            date,
-                            score: dayAggregated.avgOverallScore,
-                        });
-                    }
-                });
-
-            setTrendData(dailyScores);
         };
 
         calculateScore();
-    }, [scannedItems, filteredWellnessLogs, timeframe]);
+    }, [filteredScannedItems, filteredWellnessLogs, scannedItems, wellnessLogs, timeframe]);
 
     const handleTimeframeChange = (newTimeframe: Timeframe) => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setTimeframe(newTimeframe);
     };
 
-    const daysToShow = getTimeframeDays(timeframe);
+    // Generate personalized insights
+    const insights = useMemo(() => 
+        generateInsights(filteredWellnessLogs, filteredScannedItems, nutritionInsights),
+        [filteredWellnessLogs, filteredScannedItems, nutritionInsights]
+    );
+
+    // Calculate changes
+    const getScoreChange = (current: number, previous: number) => {
+        const change = Math.round(current - previous);
+        return { value: Math.abs(change), isPositive: change >= 0 };
+    };
+
+    const nutritionChange = getScoreChange(healthScore.nutrition, prevHealthScore.nutrition);
+    const wellnessChange = getScoreChange(healthScore.wellness, prevHealthScore.wellness);
+
+    const getTimeframeLabel = () => {
+        switch (timeframe) {
+            case '7d': return 'vs last week';
+            case '1m': return 'vs last month';
+            case 'all': return 'vs previous period';
+        }
+    };
+
+    // Handle wellness save
+    const handleWellnessSave = async (log: WellnessLog) => {
+        try {
+            const stored = await AsyncStorage.getItem('wellness_logs');
+            const logs = stored ? JSON.parse(stored) : [];
+            const existingIndex = logs.findIndex((l: any) => l.date === log.date);
+
+            if (existingIndex >= 0) {
+                logs[existingIndex] = log;
+            } else {
+                logs.unshift(log);
+            }
+
+            await AsyncStorage.setItem('wellness_logs', JSON.stringify(logs));
+            setWellnessLogs(logs);
+
+            if (log.thoughts && log.thoughts.trim()) {
+                await addJournalEntry(new Date(), {
+                    mood: log.mood >= 4 ? 'good' : log.mood >= 3 ? 'okay' : 'struggling',
+                    notes: log.thoughts.trim(),
+                });
+            }
+        } catch (error) {
+            console.error('Failed to save wellness log:', error);
+        }
+    };
+
+    // Score Info Modal
+    const renderInfoModal = () => {
+        if (!showInfoModal) return null;
+        const info = SCORE_INFO[showInfoModal];
+        const currentScore = showInfoModal === 'overall' ? healthScore.overall :
+            showInfoModal === 'nutrition' ? healthScore.nutrition : healthScore.wellness;
+        const currentRange = info.ranges.find(r => currentScore >= r.min && currentScore <= r.max) || info.ranges[info.ranges.length - 1];
+
+        return (
+            <Modal
+                visible={!!showInfoModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowInfoModal(null)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.infoModalContent}>
+                        <View style={styles.infoModalHeader}>
+                            <Text style={styles.infoModalTitle}>{info.title}</Text>
+                            <TouchableOpacity
+                                style={styles.infoModalClose}
+                                onPress={() => setShowInfoModal(null)}
+                            >
+                                <Feather name="x" size={20} color={looviColors.text.secondary} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={[styles.currentScoreBox, { backgroundColor: `${currentRange.color}15` }]}>
+                            <Text style={[styles.currentScoreValue, { color: currentRange.color }]}>
+                                {currentScore}
+                            </Text>
+                            <Text style={styles.currentScoreOutOf}>/100</Text>
+                            <View style={[styles.currentScoreBadge, { backgroundColor: currentRange.color }]}>
+                                <Text style={styles.currentScoreBadgeText}>{currentRange.label}</Text>
+                            </View>
+                        </View>
+
+                        <Text style={styles.infoModalDescription}>{info.description}</Text>
+
+                        <View style={styles.tipBox}>
+                            <Ionicons name="bulb" size={18} color={currentRange.color} />
+                            <Text style={styles.tipText}>{currentRange.tip}</Text>
+                        </View>
+
+                        <Text style={styles.rangesTitle}>Score Ranges</Text>
+                        <View style={styles.rangesContainer}>
+                            {info.ranges.map((range, index) => (
+                                <View key={index} style={styles.rangeRow}>
+                                    <View style={[styles.rangeDot, { backgroundColor: range.color }]} />
+                                    <Text style={styles.rangeLabel}>{range.label}</Text>
+                                    <Text style={styles.rangeValues}>{range.min}-{range.max}</Text>
+                                </View>
+                            ))}
+                        </View>
+
+                        <Text style={styles.improveTitle}>How to Improve</Text>
+                        {info.howToImprove.map((tip, index) => (
+                            <View key={index} style={styles.improveItem}>
+                                <Ionicons name="checkmark-circle" size={16} color={looviColors.accent.primary} />
+                                <Text style={styles.improveText}>{tip}</Text>
+                            </View>
+                        ))}
+
+                        <TouchableOpacity
+                            style={styles.infoModalButton}
+                            onPress={() => setShowInfoModal(null)}
+                        >
+                            <Text style={styles.infoModalButtonText}>Got it</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+        );
+    };
 
     return (
         <SwipeableTabView currentTab="Analytics">
@@ -227,8 +544,8 @@ export default function AnalyticsScreen() {
                     >
                         {/* Header */}
                         <View style={styles.header}>
-                            <Text style={styles.title}>Analytics</Text>
-                            <Text style={styles.subtitle}>Track your progress</Text>
+                            <Text style={styles.title}>Insights</Text>
+                            <Text style={styles.subtitle}>Your personalized health analysis</Text>
                         </View>
 
                         {/* Timeframe Toggle */}
@@ -239,255 +556,240 @@ export default function AnalyticsScreen() {
 
                         {/* Overall Health Score */}
                         <GlassCard variant="light" padding="lg" style={styles.healthCard}>
-                            <HealthScoreRing
-                                mood={wellnessAverages.mood}
-                                energy={wellnessAverages.energy}
-                                focus={wellnessAverages.focus}
-                                sleep={wellnessAverages.sleep}
-                                overallScore={healthScore.overall}
-                            />
+                            <TouchableOpacity
+                                onPress={() => setShowInfoModal('overall')}
+                                activeOpacity={0.8}
+                            >
+                                <HealthScoreRing
+                                    mood={wellnessAverages.mood}
+                                    energy={wellnessAverages.energy}
+                                    focus={wellnessAverages.focus}
+                                    sleep={wellnessAverages.sleep}
+                                    overallScore={healthScore.overall}
+                                />
+                                <View style={styles.infoHint}>
+                                    <Ionicons name="information-circle-outline" size={16} color={looviColors.text.tertiary} />
+                                    <Text style={styles.infoHintText}>Tap for details</Text>
+                                </View>
+                            </TouchableOpacity>
+
+                            {/* Score Breakdown */}
                             <View style={styles.scoreBreakdown}>
-                                <View style={styles.scoreItem}>
-                                    <Text style={styles.scoreItemLabel}>Nutrition</Text>
-                                    <Text style={styles.scoreItemValue}>{healthScore.nutrition}</Text>
-                                </View>
-                                <View style={styles.scoreItem}>
-                                    <Text style={styles.scoreItemLabel}>Wellness</Text>
-                                    <Text style={styles.scoreItemValue}>{healthScore.wellness}</Text>
-                                </View>
+                                <TouchableOpacity
+                                    style={styles.scoreItem}
+                                    onPress={() => setShowInfoModal('nutrition')}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={styles.scoreItemHeader}>
+                                        <Text style={styles.scoreItemLabel}>Nutrition</Text>
+                                        <Ionicons name="information-circle-outline" size={14} color={looviColors.text.muted} />
+                                    </View>
+                                    <Text style={[styles.scoreItemValue, { color: getScoreColor(healthScore.nutrition) }]}>
+                                        {healthScore.nutrition}
+                                    </Text>
+                                    <Text style={styles.scoreItemOutOf}>/100</Text>
+                                    {prevHealthScore.nutrition > 0 && (
+                                        <View style={styles.changeIndicator}>
+                                            <Ionicons
+                                                name={nutritionChange.isPositive ? 'arrow-up' : 'arrow-down'}
+                                                size={12}
+                                                color={nutritionChange.isPositive ? '#22C55E' : '#EF4444'}
+                                            />
+                                            <Text style={[styles.changeText, { color: nutritionChange.isPositive ? '#22C55E' : '#EF4444' }]}>
+                                                {nutritionChange.value}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={styles.scoreItem}
+                                    onPress={() => setShowInfoModal('wellness')}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={styles.scoreItemHeader}>
+                                        <Text style={styles.scoreItemLabel}>Wellness</Text>
+                                        <Ionicons name="information-circle-outline" size={14} color={looviColors.text.muted} />
+                                    </View>
+                                    <Text style={[styles.scoreItemValue, { color: getScoreColor(healthScore.wellness) }]}>
+                                        {healthScore.wellness}
+                                    </Text>
+                                    <Text style={styles.scoreItemOutOf}>/100</Text>
+                                    {prevHealthScore.wellness > 0 && (
+                                        <View style={styles.changeIndicator}>
+                                            <Ionicons
+                                                name={wellnessChange.isPositive ? 'arrow-up' : 'arrow-down'}
+                                                size={12}
+                                                color={wellnessChange.isPositive ? '#22C55E' : '#EF4444'}
+                                            />
+                                            <Text style={[styles.changeText, { color: wellnessChange.isPositive ? '#22C55E' : '#EF4444' }]}>
+                                                {wellnessChange.value}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
                             </View>
+
+                            {(prevHealthScore.nutrition > 0 || prevHealthScore.wellness > 0) && (
+                                <Text style={styles.comparisonLabel}>{getTimeframeLabel()}</Text>
+                            )}
                         </GlassCard>
 
-                        {/* Health Score Trend */}
-                        {trendData.length > 0 && (
-                            <GlassCard variant="light" padding="lg" style={styles.trendCard}>
-                                <HealthScoreTrend
-                                    data={trendData}
-                                    timeframeDays={timeframe === '7d' ? 7 : timeframe === '1m' ? 30 : 90}
-                                />
+                        {/* Personalized Insights Section - THE MAIN FOCUS */}
+                        <View style={styles.insightsSection}>
+                            <Text style={styles.insightsSectionTitle}>Your Insights</Text>
+                            <Text style={styles.insightsSectionSubtitle}>Personalized recommendations based on your data</Text>
+                            
+                            {insights.map((insight, index) => (
+                                <TouchableOpacity
+                                    key={index}
+                                    style={[
+                                        styles.insightCard,
+                                        insight.priority === 1 && styles.insightCardPriority,
+                                    ]}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={[styles.insightIconContainer, { backgroundColor: `${insight.iconColor}15` }]}>
+                                        <Ionicons name={insight.icon as any} size={24} color={insight.iconColor} />
+                                    </View>
+                                    <View style={styles.insightContent}>
+                                        <Text style={styles.insightTitle}>{insight.title}</Text>
+                                        <Text style={styles.insightMessage}>{insight.message}</Text>
+                                        {insight.action && (
+                                            <View style={styles.insightActionRow}>
+                                                <Text style={[styles.insightAction, { color: insight.iconColor }]}>{insight.action}</Text>
+                                                <Ionicons name="chevron-forward" size={14} color={insight.iconColor} />
+                                            </View>
+                                        )}
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        {/* Quick Actions */}
+                        <View style={styles.quickActionsRow}>
+                            <TouchableOpacity
+                                style={[styles.quickActionButton, styles.quickActionPrimary]}
+                                onPress={() => setShowFoodScanner(true)}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="scan" size={22} color="#FFFFFF" />
+                                <Text style={styles.quickActionPrimaryText}>Log Food</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity
+                                style={[styles.quickActionButton, styles.quickActionSecondary]}
+                                onPress={() => setShowWellnessModal(true)}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="heart" size={22} color={looviColors.coralOrange} />
+                                <Text style={styles.quickActionSecondaryText}>Check-in</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Nutrition Summary - Simplified */}
+                        {nutritionInsights && nutritionInsights.avgCalories > 0 && (
+                            <GlassCard variant="light" padding="lg" style={styles.nutritionSummaryCard}>
+                                <Text style={styles.nutritionSummaryTitle}>Nutrition Summary</Text>
+                                
+                                <View style={styles.nutritionStatsRow}>
+                                    <View style={styles.nutritionStat}>
+                                        <Text style={styles.nutritionStatValue}>{nutritionInsights.avgCalories}</Text>
+                                        <Text style={styles.nutritionStatLabel}>Calories/day</Text>
+                                    </View>
+                                    <View style={styles.nutritionStatDivider} />
+                                    <View style={styles.nutritionStat}>
+                                        <Text style={[
+                                            styles.nutritionStatValue,
+                                            { color: nutritionInsights.avgAddedSugar <= 25 ? '#22C55E' : nutritionInsights.avgAddedSugar <= 50 ? '#F59E0B' : '#EF4444' }
+                                        ]}>
+                                            {nutritionInsights.avgAddedSugar}g
+                                        </Text>
+                                        <Text style={styles.nutritionStatLabel}>Sugar/day</Text>
+                                    </View>
+                                    <View style={styles.nutritionStatDivider} />
+                                    <View style={styles.nutritionStat}>
+                                        <Text style={styles.nutritionStatValue}>{nutritionInsights.avgProtein}g</Text>
+                                        <Text style={styles.nutritionStatLabel}>Protein/day</Text>
+                                    </View>
+                                </View>
+
+                                {/* Visual sugar meter */}
+                                <View style={styles.sugarMeter}>
+                                    <View style={styles.sugarMeterHeader}>
+                                        <Text style={styles.sugarMeterLabel}>Daily Sugar</Text>
+                                        <Text style={styles.sugarMeterValue}>
+                                            {nutritionInsights.avgAddedSugar}g / 25g recommended
+                                        </Text>
+                                    </View>
+                                    <View style={styles.sugarMeterTrack}>
+                                        <View 
+                                            style={[
+                                                styles.sugarMeterFill,
+                                                { 
+                                                    width: `${Math.min((nutritionInsights.avgAddedSugar / 50) * 100, 100)}%`,
+                                                    backgroundColor: nutritionInsights.avgAddedSugar <= 25 ? '#22C55E' : nutritionInsights.avgAddedSugar <= 50 ? '#F59E0B' : '#EF4444'
+                                                }
+                                            ]} 
+                                        />
+                                        <View style={styles.sugarMeterMarker} />
+                                    </View>
+                                    <View style={styles.sugarMeterLabels}>
+                                        <Text style={styles.sugarMeterMarkerLabel}>0g</Text>
+                                        <Text style={[styles.sugarMeterMarkerLabel, { position: 'absolute', left: '50%' }]}>25g</Text>
+                                        <Text style={styles.sugarMeterMarkerLabel}>50g+</Text>
+                                    </View>
+                                </View>
                             </GlassCard>
                         )}
 
-                        {/* Sugar Consumption Section */}
-                        <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>Sugar Consumption</Text>
-                        </View>
-                        <GlassCard variant="light" padding="lg" style={styles.chartCard}>
-                            {scannedItems.length > 0 ? (
-                                <SugarConsumptionTrend
-                                    data={scannedItems.map(item => ({
-                                        date: item.timestamp.split('T')[0],
-                                        sugar: item.sugar || 0,
-                                    }))}
-                                    timeframeDays={timeframe === '7d' ? 7 : timeframe === '1m' ? 30 : 90}
-                                    targetGrams={25}
-                                />
-                            ) : (
-                                <View style={styles.emptyChart}>
-                                    <Text style={styles.emptyChartEmoji}>📊</Text>
-                                    <Text style={styles.emptyChartTitle}>No Food Logged Yet</Text>
-                                    <Text style={styles.emptyChartText}>
-                                        Start logging your meals to track sugar consumption
-                                    </Text>
+                        {/* Wellness Summary */}
+                        {filteredWellnessLogs.length > 0 && (
+                            <GlassCard variant="light" padding="lg" style={styles.wellnessSummaryCard}>
+                                <Text style={styles.wellnessSummaryTitle}>Wellness Summary</Text>
+                                <Text style={styles.wellnessSummarySubtitle}>Based on {filteredWellnessLogs.length} check-ins</Text>
+                                
+                                <View style={styles.wellnessMetricsGrid}>
+                                    {[
+                                        { label: 'Mood', value: wellnessAverages.mood, icon: 'happy-outline', color: looviColors.coralOrange },
+                                        { label: 'Energy', value: wellnessAverages.energy, icon: 'flash-outline', color: '#F5B461' },
+                                        { label: 'Focus', value: wellnessAverages.focus, icon: 'bulb-outline', color: looviColors.coralDark },
+                                        { label: 'Sleep', value: wellnessAverages.sleep, icon: 'bed-outline', color: looviColors.skyBlueDark, suffix: 'h' },
+                                    ].map((metric, index) => (
+                                        <View key={index} style={styles.wellnessMetricItem}>
+                                            <View style={[styles.wellnessMetricIcon, { backgroundColor: `${metric.color}15` }]}>
+                                                <Ionicons name={metric.icon as any} size={18} color={metric.color} />
+                                            </View>
+                                            <Text style={styles.wellnessMetricValue}>
+                                                {metric.suffix ? metric.value.toFixed(1) : metric.value.toFixed(1)}
+                                                {metric.suffix || '/5'}
+                                            </Text>
+                                            <Text style={styles.wellnessMetricLabel}>{metric.label}</Text>
+                                        </View>
+                                    ))}
                                 </View>
-                            )}
-                        </GlassCard>
-
-                        {/* CTA: Log Food */}
-                        <TouchableOpacity
-                            style={styles.ctaButton}
-                            onPress={() => navigation.navigate('Track', { tab: 'scan' })}
-                            activeOpacity={0.8}
-                        >
-                            <Ionicons name="nutrition" size={20} color="#FFFFFF" />
-                            <Text style={styles.ctaButtonText}>Log Today's Food</Text>
-                        </TouchableOpacity>
-
-                        {/* Nutrition Insights */}
-                        <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>Nutrition Insights</Text>
-                        </View>
-                        <GlassCard variant="light" padding="lg" style={styles.nutritionCard}>
-                            {nutritionInsights && nutritionInsights.avgCalories > 0 ? (
-                                <>
-                                    <View style={styles.nutritionHeader}>
-                                        <Ionicons name="nutrition" size={32} color={looviColors.accent.primary} />
-                                        <View style={styles.nutritionHeaderText}>
-                                            <Text style={styles.nutritionTitle}>Daily Averages</Text>
-                                            <Text style={styles.nutritionSubtitle}>Based on your logged food</Text>
-                                        </View>
-                                    </View>
-
-                                    {/* Macros Grid */}
-                                    <View style={styles.macroGrid}>
-                                        <View style={styles.macroItem}>
-                                            <Text style={styles.macroValue}>{nutritionInsights.avgCalories}</Text>
-                                            <Text style={styles.macroLabel}>Calories</Text>
-                                        </View>
-                                        <View style={styles.macroItem}>
-                                            <Text style={styles.macroValue}>{nutritionInsights.avgProtein}g</Text>
-                                            <Text style={styles.macroLabel}>Protein</Text>
-                                        </View>
-                                        <View style={styles.macroItem}>
-                                            <Text style={styles.macroValue}>{nutritionInsights.avgCarbs}g</Text>
-                                            <Text style={styles.macroLabel}>Carbs</Text>
-                                        </View>
-                                        <View style={styles.macroItem}>
-                                            <Text style={styles.macroValue}>{nutritionInsights.avgFat}g</Text>
-                                            <Text style={styles.macroLabel}>Fat</Text>
-                                        </View>
-                                    </View>
-
-                                    {/* Macro Balance */}
-                                    <View style={styles.macroBalanceSection}>
-                                        <Text style={styles.macroBalanceTitle}>Macro Balance</Text>
-                                        <View style={styles.macroBalanceBar}>
-                                            <View style={[styles.macroBalanceSegment, { flex: nutritionInsights.macroBalance.protein, backgroundColor: '#3B82F6' }]} />
-                                            <View style={[styles.macroBalanceSegment, { flex: nutritionInsights.macroBalance.carbs, backgroundColor: '#22C55E' }]} />
-                                            <View style={[styles.macroBalanceSegment, { flex: nutritionInsights.macroBalance.fat, backgroundColor: '#F59E0B' }]} />
-                                        </View>
-                                        <View style={styles.macroBalanceLegend}>
-                                            <View style={styles.macroBalanceLegendItem}>
-                                                <View style={[styles.macroBalanceDot, { backgroundColor: '#3B82F6' }]} />
-                                                <Text style={styles.macroBalanceLegendText}>Protein {nutritionInsights.macroBalance.protein}%</Text>
-                                            </View>
-                                            <View style={styles.macroBalanceLegendItem}>
-                                                <View style={[styles.macroBalanceDot, { backgroundColor: '#22C55E' }]} />
-                                                <Text style={styles.macroBalanceLegendText}>Carbs {nutritionInsights.macroBalance.carbs}%</Text>
-                                            </View>
-                                            <View style={styles.macroBalanceLegendItem}>
-                                                <View style={[styles.macroBalanceDot, { backgroundColor: '#F59E0B' }]} />
-                                                <Text style={styles.macroBalanceLegendText}>Fat {nutritionInsights.macroBalance.fat}%</Text>
-                                            </View>
-                                        </View>
-                                    </View>
-
-                                    {/* Sugar Status */}
-                                    <View style={styles.sugarStatusSection}>
-                                        <Text style={styles.sugarStatusLabel}>Added Sugar Intake</Text>
-                                        <View style={styles.sugarStatusRow}>
-                                            <Text style={styles.sugarStatusValue}>{nutritionInsights.avgAddedSugar}g</Text>
-                                            <View style={[
-                                                styles.sugarStatusBadge,
-                                                {
-                                                    backgroundColor:
-                                                        nutritionInsights.sugarStatus === 'excellent' ? 'rgba(34, 197, 94, 0.1)' :
-                                                            nutritionInsights.sugarStatus === 'good' ? 'rgba(245, 158, 11, 0.1)' :
-                                                                'rgba(239, 68, 68, 0.1)'
-                                                }
-                                            ]}>
-                                                <Text style={[
-                                                    styles.sugarStatusBadgeText,
-                                                    {
-                                                        color:
-                                                            nutritionInsights.sugarStatus === 'excellent' ? '#22C55E' :
-                                                                nutritionInsights.sugarStatus === 'good' ? '#F59E0B' :
-                                                                    '#EF4444'
-                                                    }
-                                                ]}>
-                                                    {nutritionInsights.sugarStatus === 'excellent' ? 'Excellent!' :
-                                                        nutritionInsights.sugarStatus === 'good' ? 'Good' :
-                                                            nutritionInsights.sugarStatus === 'high' ? 'High' : 'Very High'}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                        <Text style={styles.sugarStatusHint}>
-                                            {nutritionInsights.sugarStatus === 'excellent' ? 'Keep up the great work staying below 25g!' :
-                                                nutritionInsights.sugarStatus === 'good' ? 'Try to stay below 50g per day' :
-                                                    'WHO recommends less than 50g of added sugar per day'}
-                                        </Text>
-                                    </View>
-
-                                    {/* Recommendations */}
-                                    <View style={styles.recommendationsSection}>
-                                        <Text style={styles.recommendationsTitle}>Recommendations</Text>
-                                        {nutritionInsights.recommendations.map((rec, index) => (
-                                            <View key={index} style={styles.recommendationItem}>
-                                                <Ionicons name="checkmark-circle" size={16} color={looviColors.accent.primary} />
-                                                <Text style={styles.recommendationText}>{rec}</Text>
-                                            </View>
-                                        ))}
-                                    </View>
-                                </>
-                            ) : (
-                                <>
-                                    <Ionicons name="leaf" size={40} color={looviColors.accent.primary} />
-                                    <Text style={styles.placeholderTitle}>Start Logging Food</Text>
-                                    <Text style={styles.placeholderText}>
-                                        Log your meals to see detailed nutrition insights and personalized recommendations.
-                                    </Text>
-                                </>
-                            )}
-                        </GlassCard>
-
-                        {/* Qualitative Advice */}
-                        <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>Personalized Tips</Text>
-                        </View>
-                        <GlassCard variant="light" padding="lg" style={styles.adviceCard}>
-                            <Ionicons name="bulb" size={28} color={looviColors.accent.primary} />
-                            <View style={styles.adviceContent}>
-                                {filteredWellnessLogs.length === 0 ? (
-                                    <>
-                                        <Text style={styles.adviceTitle}>Start Tracking Your Wellness</Text>
-                                        <Text style={styles.adviceText}>
-                                            Log your daily wellness metrics to receive personalized tips based on your mood, energy, focus, and sleep patterns.
-                                        </Text>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Text style={styles.adviceTitle}>
-                                            {wellnessAverages.mood < 3
-                                                ? 'Focus on mood-boosting activities'
-                                                : wellnessAverages.energy < 3
-                                                    ? 'Consider improving your energy levels'
-                                                    : wellnessAverages.sleep < 7
-                                                        ? 'Prioritize getting more sleep'
-                                                        : 'Keep up the great work!'}
-                                        </Text>
-                                        <Text style={styles.adviceText}>
-                                            {wellnessAverages.mood < 3
-                                                ? 'Low mood can trigger sugar cravings. Try exercise, socializing, or journaling to boost your spirits.'
-                                                : wellnessAverages.energy < 3
-                                                    ? 'Stable blood sugar helps maintain energy. Focus on protein and complex carbs throughout the day.'
-                                                    : wellnessAverages.sleep < 7
-                                                        ? 'Poor sleep increases sugar cravings. Aim for 7-9 hours and avoid screens before bed.'
-                                                        : 'Your wellness metrics look balanced. Keep tracking to maintain your progress.'}
-                                        </Text>
-                                    </>
-                                )}
-                            </View>
-                        </GlassCard>
-
-                        {/* Connection Section */}
-                        <GlassCard variant="light" padding="lg" style={styles.connectionCard}>
-                            <Text style={styles.connectionTitle}>Mind-Body Connection</Text>
-                            <Text style={styles.connectionText}>
-                                Your wellness data shows how your body responds to your choices.
-                                {filteredWellnessLogs.length > 0
-                                    ? ` Based on ${filteredWellnessLogs.length} entries this period.`
-                                    : ' Start logging to see patterns.'}
-                            </Text>
-                            <TouchableOpacity
-                                style={styles.journalButton}
-                                onPress={() => setShowJournalModal(true)}
-                                activeOpacity={0.8}
-                            >
-                                <Ionicons name="book" size={18} color="#8B5CF6" />
-                                <Text style={styles.journalButtonText}>Reflect in Journal</Text>
-                            </TouchableOpacity>
-                        </GlassCard>
+                            </GlassCard>
+                        )}
 
                     </ScrollView>
 
-                    {/* Journal Modal */}
-                    <JournalEntryModal
-                        visible={showJournalModal}
-                        onClose={() => setShowJournalModal(false)}
-                        onSave={async (entry) => {
-                            await addJournalEntry(new Date(), entry);
-                            setShowJournalModal(false);
+                    {/* Modals */}
+                    {renderInfoModal()}
+
+                    <FoodScannerModal
+                        visible={showFoodScanner}
+                        onClose={() => setShowFoodScanner(false)}
+                        onScanComplete={(item) => {
+                            setScannedItems(prev => [item, ...prev]);
+                            setShowFoodScanner(false);
                         }}
+                    />
+
+                    <WellnessModal
+                        visible={showWellnessModal}
+                        onClose={() => setShowWellnessModal(false)}
+                        onSave={handleWellnessSave}
+                        selectedDate={new Date().toISOString().split('T')[0]}
                     />
                 </SafeAreaView>
             </LooviBackground>
@@ -522,33 +824,20 @@ const styles = StyleSheet.create({
         color: looviColors.text.secondary,
         marginTop: spacing.xs,
     },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: spacing.md,
-        marginTop: spacing.md,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-    },
-    sectionBadge: {
-        marginLeft: spacing.sm,
-        fontSize: 11,
-        fontWeight: '600',
-        color: looviColors.accent.primary,
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        paddingHorizontal: spacing.sm,
-        paddingVertical: 2,
-        borderRadius: 10,
-    },
     healthCard: {
         marginBottom: spacing.lg,
         alignItems: 'center',
     },
-    trendCard: {
-        marginBottom: spacing.lg,
+    infoHint: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        marginTop: spacing.sm,
+    },
+    infoHintText: {
+        fontSize: 12,
+        color: looviColors.text.tertiary,
     },
     scoreBreakdown: {
         flexDirection: 'row',
@@ -561,350 +850,407 @@ const styles = StyleSheet.create({
     },
     scoreItem: {
         alignItems: 'center',
+        paddingHorizontal: spacing.lg,
+    },
+    scoreItemHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginBottom: spacing.xs,
     },
     scoreItemLabel: {
         fontSize: 12,
         fontWeight: '500',
         color: looviColors.text.tertiary,
-        marginBottom: spacing.xs,
     },
     scoreItemValue: {
-        fontSize: 24,
+        fontSize: 28,
         fontWeight: '700',
-        color: looviColors.text.primary,
     },
-    chartCard: {
-        marginBottom: spacing.md,
+    scoreItemOutOf: {
+        fontSize: 12,
+        color: looviColors.text.muted,
+        marginTop: -4,
     },
-    chartScrollContent: {
-        minWidth: '100%',
-    },
-    chartLegend: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: spacing.lg,
-        marginTop: spacing.md,
-        paddingTop: spacing.md,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(0, 0, 0, 0.05)',
-    },
-    legendItem: {
+    changeIndicator: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.xs,
+        gap: 2,
+        marginTop: spacing.xs,
     },
-    legendDot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-    },
-    legendText: {
+    changeText: {
         fontSize: 12,
-        fontWeight: '500',
-        color: looviColors.text.tertiary,
+        fontWeight: '600',
     },
-    ctaButton: {
+    comparisonLabel: {
+        fontSize: 11,
+        color: looviColors.text.muted,
+        marginTop: spacing.md,
+    },
+    // Insights Section
+    insightsSection: {
+        marginBottom: spacing.lg,
+    },
+    insightsSectionTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        marginBottom: spacing.xs,
+    },
+    insightsSectionSubtitle: {
+        fontSize: 14,
+        color: looviColors.text.secondary,
+        marginBottom: spacing.lg,
+    },
+    insightCard: {
+        flexDirection: 'row',
+        backgroundColor: '#FFFFFF',
+        borderRadius: borderRadius.xl,
+        padding: spacing.md,
+        marginBottom: spacing.md,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    insightCardPriority: {
+        borderLeftWidth: 4,
+        borderLeftColor: looviColors.coralOrange,
+    },
+    insightIconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: spacing.md,
+    },
+    insightContent: {
+        flex: 1,
+    },
+    insightTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        marginBottom: 4,
+    },
+    insightMessage: {
+        fontSize: 14,
+        fontWeight: '400',
+        color: looviColors.text.secondary,
+        lineHeight: 20,
+    },
+    insightActionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: spacing.sm,
+    },
+    insightAction: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    // Quick Actions
+    quickActionsRow: {
+        flexDirection: 'row',
+        gap: spacing.md,
+        marginBottom: spacing.lg,
+    },
+    quickActionButton: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: spacing.sm,
-        backgroundColor: looviColors.accent.primary,
         paddingVertical: 14,
         borderRadius: borderRadius.xl,
-        marginBottom: spacing.lg,
     },
-    ctaButtonText: {
+    quickActionPrimary: {
+        backgroundColor: looviColors.accent.primary,
+    },
+    quickActionPrimaryText: {
         fontSize: 16,
         fontWeight: '600',
         color: '#FFFFFF',
     },
-    nutritionCard: {
-        marginBottom: spacing.lg,
-        alignItems: 'center',
+    quickActionSecondary: {
+        backgroundColor: 'rgba(232, 168, 124, 0.15)',
     },
-    placeholderTitle: {
+    quickActionSecondaryText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: looviColors.coralOrange,
+    },
+    // Nutrition Summary
+    nutritionSummaryCard: {
+        marginBottom: spacing.lg,
+    },
+    nutritionSummaryTitle: {
         fontSize: 18,
         fontWeight: '700',
         color: looviColors.text.primary,
-        marginBottom: spacing.sm,
-        marginTop: spacing.md,
+        marginBottom: spacing.md,
     },
-    placeholderText: {
-        fontSize: 14,
-        fontWeight: '400',
-        color: looviColors.text.secondary,
-        textAlign: 'center',
-        lineHeight: 20,
-    },
-    adviceCard: {
+    nutritionStatsRow: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         marginBottom: spacing.lg,
+    },
+    nutritionStat: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    nutritionStatValue: {
+        fontSize: 22,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+    },
+    nutritionStatLabel: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: looviColors.text.tertiary,
+        marginTop: 2,
+    },
+    nutritionStatDivider: {
+        width: 1,
+        height: 30,
+        backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    },
+    sugarMeter: {
+        marginTop: spacing.sm,
+    },
+    sugarMeterHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: spacing.sm,
+    },
+    sugarMeterLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: looviColors.text.primary,
+    },
+    sugarMeterValue: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: looviColors.text.tertiary,
+    },
+    sugarMeterTrack: {
+        height: 8,
+        backgroundColor: 'rgba(0, 0, 0, 0.05)',
+        borderRadius: 4,
+        position: 'relative',
+    },
+    sugarMeterFill: {
+        height: '100%',
+        borderRadius: 4,
+    },
+    sugarMeterMarker: {
+        position: 'absolute',
+        left: '50%',
+        top: -2,
+        width: 2,
+        height: 12,
+        backgroundColor: looviColors.text.tertiary,
+    },
+    sugarMeterLabels: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 4,
+        position: 'relative',
+    },
+    sugarMeterMarkerLabel: {
+        fontSize: 10,
+        color: looviColors.text.muted,
+    },
+    // Wellness Summary
+    wellnessSummaryCard: {
+        marginBottom: spacing.lg,
+    },
+    wellnessSummaryTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+    },
+    wellnessSummarySubtitle: {
+        fontSize: 13,
+        fontWeight: '400',
+        color: looviColors.text.tertiary,
+        marginBottom: spacing.lg,
+    },
+    wellnessMetricsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
         gap: spacing.md,
     },
-    adviceContent: {
+    wellnessMetricItem: {
         flex: 1,
+        minWidth: '45%',
+        backgroundColor: 'rgba(0, 0, 0, 0.02)',
+        padding: spacing.md,
+        borderRadius: borderRadius.lg,
+        alignItems: 'center',
     },
-    adviceTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: looviColors.text.primary,
+    wellnessMetricIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
         marginBottom: spacing.xs,
     },
-    adviceText: {
-        fontSize: 14,
-        fontWeight: '400',
-        color: looviColors.text.secondary,
-        lineHeight: 20,
-    },
-    connectionCard: {
-        marginBottom: spacing.lg,
-    },
-    connectionTitle: {
-        fontSize: 16,
+    wellnessMetricValue: {
+        fontSize: 18,
         fontWeight: '700',
         color: looviColors.text.primary,
-        marginBottom: spacing.sm,
     },
-    connectionText: {
+    wellnessMetricLabel: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: looviColors.text.tertiary,
+        marginTop: 2,
+    },
+    // Info Modal
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: spacing.lg,
+    },
+    infoModalContent: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: borderRadius['2xl'],
+        padding: spacing.xl,
+        width: '100%',
+        maxWidth: 400,
+        maxHeight: '85%',
+    },
+    infoModalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: spacing.lg,
+    },
+    infoModalTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+    },
+    infoModalClose: {
+        padding: spacing.xs,
+    },
+    currentScoreBox: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        justifyContent: 'center',
+        padding: spacing.lg,
+        borderRadius: borderRadius.xl,
+        marginBottom: spacing.md,
+    },
+    currentScoreValue: {
+        fontSize: 48,
+        fontWeight: '800',
+    },
+    currentScoreOutOf: {
+        fontSize: 18,
+        fontWeight: '500',
+        color: looviColors.text.tertiary,
+        marginLeft: 4,
+    },
+    currentScoreBadge: {
+        marginLeft: spacing.md,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.xs,
+        borderRadius: borderRadius.full,
+    },
+    currentScoreBadgeText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
+    infoModalDescription: {
         fontSize: 14,
         fontWeight: '400',
         color: looviColors.text.secondary,
         lineHeight: 20,
         marginBottom: spacing.md,
     },
-    journalButton: {
+    tipBox: {
         flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
+        alignItems: 'flex-start',
         gap: spacing.sm,
-        backgroundColor: 'rgba(139, 92, 246, 0.15)',
-        paddingVertical: 12,
-        borderRadius: borderRadius.lg,
-    },
-    journalButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#8B5CF6',
-    },
-    statsCard: {
-        marginTop: spacing.md,
-    },
-    statsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-    },
-    statItem: {
-        alignItems: 'center',
-        flex: 1,
-    },
-    statValue: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-    },
-    statLabel: {
-        fontSize: 11,
-        fontWeight: '500',
-        color: looviColors.text.tertiary,
-        marginTop: 2,
-    },
-    statDivider: {
-        width: 1,
-        height: 30,
-        backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    },
-    // Nutrition Insights Styles
-    nutritionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: spacing.lg,
-        gap: spacing.md,
-    },
-    nutritionHeaderText: {
-        flex: 1,
-    },
-    nutritionTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-    },
-    nutritionSubtitle: {
-        fontSize: 13,
-        fontWeight: '400',
-        color: looviColors.text.secondary,
-        marginTop: 2,
-    },
-    macroGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.md,
-        marginBottom: spacing.lg,
-    },
-    macroItem: {
-        flex: 1,
-        minWidth: '45%',
         backgroundColor: 'rgba(0, 0, 0, 0.03)',
         padding: spacing.md,
         borderRadius: borderRadius.lg,
-        alignItems: 'center',
-    },
-    macroValue: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-    },
-    macroLabel: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: looviColors.text.tertiary,
-        marginTop: 4,
-    },
-    macroBalanceSection: {
         marginBottom: spacing.lg,
-        paddingTop: spacing.lg,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(0, 0, 0, 0.05)',
     },
-    macroBalanceTitle: {
+    tipText: {
+        flex: 1,
+        fontSize: 13,
+        fontWeight: '500',
+        color: looviColors.text.primary,
+        lineHeight: 18,
+    },
+    rangesTitle: {
         fontSize: 14,
         fontWeight: '600',
         color: looviColors.text.primary,
         marginBottom: spacing.sm,
     },
-    macroBalanceBar: {
-        flexDirection: 'row',
-        height: 8,
-        borderRadius: 4,
-        overflow: 'hidden',
-        marginBottom: spacing.sm,
-    },
-    macroBalanceSegment: {
-        height: '100%',
-    },
-    macroBalanceLegend: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.md,
-    },
-    macroBalanceLegendItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.xs,
-    },
-    macroBalanceDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-    },
-    macroBalanceLegendText: {
-        fontSize: 11,
-        fontWeight: '500',
-        color: looviColors.text.secondary,
-    },
-    sugarStatusSection: {
+    rangesContainer: {
         marginBottom: spacing.lg,
-        paddingTop: spacing.lg,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(0, 0, 0, 0.05)',
     },
-    sugarStatusLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: looviColors.text.primary,
-        marginBottom: spacing.sm,
-    },
-    sugarStatusRow: {
+    rangeRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.md,
-        marginBottom: spacing.xs,
+        paddingVertical: spacing.xs,
     },
-    sugarStatusValue: {
-        fontSize: 24,
-        fontWeight: '700',
+    rangeDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        marginRight: spacing.sm,
+    },
+    rangeLabel: {
+        flex: 1,
+        fontSize: 13,
+        fontWeight: '500',
         color: looviColors.text.primary,
     },
-    sugarStatusBadge: {
-        paddingHorizontal: spacing.md,
-        paddingVertical: 4,
-        borderRadius: borderRadius.md,
-    },
-    sugarStatusBadgeText: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    sugarStatusHint: {
-        fontSize: 12,
+    rangeValues: {
+        fontSize: 13,
         fontWeight: '400',
         color: looviColors.text.tertiary,
     },
-    recommendationsSection: {
-        paddingTop: spacing.lg,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(0, 0, 0, 0.05)',
-    },
-    recommendationsTitle: {
+    improveTitle: {
         fontSize: 14,
         fontWeight: '600',
         color: looviColors.text.primary,
         marginBottom: spacing.sm,
     },
-    recommendationItem: {
+    improveItem: {
         flexDirection: 'row',
         alignItems: 'flex-start',
         gap: spacing.sm,
         marginBottom: spacing.sm,
-        width: '100%',
     },
-    recommendationText: {
+    improveText: {
         flex: 1,
         fontSize: 13,
         fontWeight: '400',
         color: looviColors.text.secondary,
         lineHeight: 18,
     },
-    sugarSummary: {
+    infoModalButton: {
+        backgroundColor: looviColors.accent.primary,
+        paddingVertical: 14,
+        borderRadius: borderRadius.xl,
         alignItems: 'center',
-        paddingVertical: spacing.xl,
-    },
-    sugarSummaryValue: {
-        fontSize: 48,
-        fontWeight: '800',
-        color: looviColors.accent.primary,
         marginTop: spacing.md,
     },
-    sugarSummaryLabel: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: looviColors.text.primary,
-        marginTop: spacing.xs,
-    },
-    sugarSummarySubtext: {
-        fontSize: 12,
-        fontWeight: '400',
-        color: looviColors.text.tertiary,
-        marginTop: spacing.xs,
-    },
-    emptyChart: {
-        alignItems: 'center',
-        paddingVertical: spacing['2xl'],
-    },
-    emptyChartEmoji: {
-        fontSize: 48,
-        marginBottom: spacing.md,
-    },
-    emptyChartTitle: {
+    infoModalButtonText: {
         fontSize: 16,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-        marginBottom: spacing.xs,
-    },
-    emptyChartText: {
-        fontSize: 13,
-        fontWeight: '400',
-        color: looviColors.text.tertiary,
-        textAlign: 'center',
+        fontWeight: '600',
+        color: '#FFFFFF',
     },
 });

@@ -108,22 +108,30 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
     const loadData = useCallback(async () => {
         setIsLoading(true);
         try {
-            // Load onboarding data from local storage
+            // Load onboarding data from local storage (this is fast, local)
             const localOnboarding = await onboardingService.getOnboardingData();
             setOnboardingData(localOnboarding);
 
             const completed = await onboardingService.hasCompletedOnboarding();
             setHasCompletedOnboarding(completed);
 
-            // If authenticated, also load from Firebase
+            // If authenticated, try to load from Firebase with timeout
             if (isAuthenticated && userId) {
-                const profile = await userService.getUserProfile(userId);
+                // Use Promise.race for timeout - don't block if Firestore is slow
+                const profilePromise = Promise.race([
+                    userService.getUserProfile(userId),
+                    new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000))
+                ]);
+                
+                const profile = await profilePromise;
                 if (profile) {
                     setStreakData(profile.streak);
                 }
 
-                const checkIn = await userService.getTodayCheckIn(userId);
-                setTodayCheckIn(checkIn);
+                // Non-blocking check-in fetch - don't wait for it
+                userService.getTodayCheckIn(userId)
+                    .then(checkIn => setTodayCheckIn(checkIn))
+                    .catch(() => {}); // Silently ignore errors
             } else {
                 // Use local streak data from onboarding
                 if (localOnboarding.startDate) {

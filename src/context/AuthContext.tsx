@@ -6,9 +6,10 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { auth, isFirebaseReady } from '../config/firebase';
 import { User } from '../types';
 import { userService } from '../services/userService';
+import { notificationService } from '../services/notificationService';
 
 interface AuthContextType {
     user: User | null;
@@ -42,26 +43,89 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
+        console.log('🔄 Setting up auth state listener...');
+        let isMounted = true;
+        
+        // Helper to create local user from Firebase Auth
+        const createLocalUser = (fbUser: FirebaseUser): User => ({
+            id: fbUser.uid,
+            email: fbUser.email || '',
+            displayName: fbUser.displayName || 'User',
+            username: undefined,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            preferences: {
+                notifications: true,
+                theme: 'dark',
+            },
+            streak: {
+                currentStreak: 0,
+                longestStreak: 0,
+                lastCheckIn: null,
+                startDate: new Date(),
+                totalDaysSugarFree: 0,
+            },
+        });
+
         const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+            if (!isMounted) return;
+            
+            console.log('👤 Auth state changed:', fbUser ? `User: ${fbUser.uid}` : 'No user');
             setFirebaseUser(fbUser);
 
             if (fbUser) {
-                // Fetch user profile from Firestore
-                try {
-                    const userProfile = await userService.getUserProfile(fbUser.uid);
-                    setUser(userProfile);
-                } catch (error) {
-                    console.error('Error fetching user profile:', error);
-                    setUser(null);
+                // Set local user immediately so app can proceed
+                const localUser = createLocalUser(fbUser);
+                
+                // Try to fetch profile with a short timeout - don't block the app
+                const fetchWithTimeout = async (): Promise<User> => {
+                    try {
+                        const profile = await Promise.race([
+                            userService.getUserProfile(fbUser.uid, 0), // No retries - fast fail
+                            new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000))
+                        ]);
+                        
+                        if (profile) {
+                            console.log('✅ User profile loaded from Firestore');
+                            return profile;
+                        }
+                    } catch (e) {
+                        console.log('📴 Could not fetch profile, using local data');
+                    }
+                    return localUser;
+                };
+
+                const finalUser = await fetchWithTimeout();
+                if (isMounted) {
+                    setUser(finalUser);
+                    setIsLoading(false);
+                    console.log('✅ Auth loading complete');
                 }
+
+                // Register for push notifications (don't block on this)
+                notificationService.registerForPushNotifications(fbUser.uid)
+                    .then(token => token && console.log('Push notifications registered'))
+                    .catch(() => {});
             } else {
                 setUser(null);
+                setIsLoading(false);
+                console.log('✅ Auth loading complete (no user)');
             }
-
-            setIsLoading(false);
         });
 
-        return () => unsubscribe();
+        // Safety timeout - if nothing happens in 5 seconds, just proceed
+        const safetyTimeout = setTimeout(() => {
+            if (isMounted && isLoading) {
+                console.log('⏰ Safety timeout - proceeding without waiting');
+                setIsLoading(false);
+            }
+        }, 5000);
+
+        return () => {
+            isMounted = false;
+            clearTimeout(safetyTimeout);
+            unsubscribe();
+        };
     }, []);
 
     const value: AuthContextType = {
@@ -79,3 +143,4 @@ export function AuthProvider({ children }: AuthProviderProps) {
 }
 
 export default AuthContext;
+

@@ -20,27 +20,51 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { spacing, borderRadius } from '../../theme';
 import LooviBackground, { looviColors } from '../../components/LooviBackground';
 import { GlassCard } from '../../components/GlassCard';
+import { useAuth } from '../../hooks/useAuth';
 
 type SignUpScreenProps = {
     navigation: NativeStackNavigationProp<any, 'SignUp'>;
 };
 
 export default function SignUpScreen({ navigation }: SignUpScreenProps) {
+    const { signUp } = useAuth();
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
     const handleSignUp = async () => {
         setLoading(true);
-        // TODO: Implement sign up
-        setTimeout(() => {
+        setError('');
+
+        try {
+            const success = await signUp(email.trim(), password, name.trim());
+            if (success) {
+                // Navigate to Main app after successful signup
+                console.log('Sign up successful - navigating to Main');
+                navigation.getParent()?.reset({
+                    index: 0,
+                    routes: [{ name: 'Main' }],
+                });
+            } else {
+                setError('Failed to create account');
+                setLoading(false);
+            }
+        } catch (err: any) {
+            console.error('Sign up error:', err);
+            const errorMessage = err?.message || 'Failed to sign up';
+            if (errorMessage.includes('email-already-in-use')) {
+                setError('This email is already registered');
+            } else if (errorMessage.includes('weak-password')) {
+                setError('Password is too weak');
+            } else if (errorMessage.includes('invalid-email')) {
+                setError('Invalid email address');
+            } else {
+                setError('Sign up failed. Please try again.');
+            }
             setLoading(false);
-            navigation.getParent()?.reset({
-                index: 0,
-                routes: [{ name: 'Main' }],
-            });
-        }, 1000);
+        }
     };
 
     const handleLogin = () => {
@@ -109,6 +133,10 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
                                     autoCapitalize="none"
                                 />
                             </View>
+
+                            {error ? (
+                                <Text style={styles.errorText}>{error}</Text>
+                            ) : null}
                         </GlassCard>
 
                         {/* Sign Up Button */}
@@ -238,5 +266,12 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: looviColors.accent.primary,
+    },
+    errorText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: looviColors.accent.error,
+        textAlign: 'center',
+        marginTop: spacing.md,
     },
 });
