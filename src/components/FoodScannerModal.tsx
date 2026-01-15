@@ -1,8 +1,8 @@
 /**
  * FoodScannerModal
  * 
- * Modal for scanning food items with full macro analysis.
- * New workflow: Photo → Optional description → AI Analysis → Confirmation/Edit → Portion → Save
+ * High-end, premium modal for scanning food items.
+ * Prioritizes the "Scan" action while keeping other options accessible.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -22,7 +22,7 @@ import {
     Keyboard,
     TouchableWithoutFeedback,
 } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import Slider from '@react-native-community/slider';
 import { spacing, borderRadius } from '../theme';
@@ -41,7 +41,7 @@ interface FoodScannerModalProps {
     visible: boolean;
     onClose: () => void;
     onScanComplete: (item: ScannedItem) => void;
-    selectedDate?: string; // For backdating (YYYY-MM-DD format)
+    selectedDate?: string;
 }
 
 type ScanStep = 'select' | 'describe' | 'text-input' | 'analyzing' | 'result';
@@ -55,16 +55,16 @@ export default function FoodScannerModal({
     const [step, setStep] = useState<ScanStep>('select');
     const [imageUri, setImageUri] = useState<string | null>(null);
     const [description, setDescription] = useState('');
-    const [textOnlyInput, setTextOnlyInput] = useState(''); // For text-only food entry
+    const [textOnlyInput, setTextOnlyInput] = useState('');
     const [result, setResult] = useState<AnalysisResult | null>(null);
     const [portionPercent, setPortionPercent] = useState(100);
     const [editedName, setEditedName] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [recentFoods, setRecentFoods] = useState<ScannedItem[]>([]);
 
-    // Load recent foods when modal opens
     useEffect(() => {
         if (visible) {
+            console.log('FoodScannerModal visible');
             loadRecentFoods();
         }
     }, [visible]);
@@ -72,14 +72,13 @@ export default function FoodScannerModal({
     const loadRecentFoods = async () => {
         try {
             const items = await getScannedItems();
-            // Get unique items by name, most recent first, limit to 10
             const uniqueMap = new Map<string, ScannedItem>();
             items.forEach(item => {
                 if (!uniqueMap.has(item.name)) {
                     uniqueMap.set(item.name, item);
                 }
             });
-            setRecentFoods(Array.from(uniqueMap.values()).slice(0, 10));
+            setRecentFoods(Array.from(uniqueMap.values()).slice(0, 5));
         } catch (error) {
             console.error('Error loading recent foods:', error);
         }
@@ -97,7 +96,6 @@ export default function FoodScannerModal({
     };
 
     const quickAddRecent = async (item: ScannedItem) => {
-        // Create a copy with new ID and timestamp for the selected date
         const timestamp = selectedDate
             ? new Date(selectedDate + 'T12:00:00').toISOString()
             : new Date().toISOString();
@@ -122,46 +120,36 @@ export default function FoodScannerModal({
         onClose();
     };
 
-    const requestPermissions = async () => {
+    const takePhoto = async () => {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
-            Alert.alert(
-                'Permission Required',
-                'Camera permission is needed to scan food items.',
-                [{ text: 'OK' }]
-            );
-            return false;
+            Alert.alert('Permission Required', 'Camera access is needed.');
+            return;
         }
-        return true;
-    };
 
-    const takePhoto = async () => {
-        const hasPermission = await requestPermissions();
-        if (!hasPermission) return;
-
-        const result = await ImagePicker.launchCameraAsync({
+        const res = await ImagePicker.launchCameraAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             aspect: [4, 3],
             quality: 0.8,
         });
 
-        if (!result.canceled && result.assets[0]) {
-            setImageUri(result.assets[0].uri);
+        if (!res.canceled && res.assets[0]) {
+            setImageUri(res.assets[0].uri);
             setStep('describe');
         }
     };
 
     const pickFromGallery = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
+        const res = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             aspect: [4, 3],
             quality: 0.8,
         });
 
-        if (!result.canceled && result.assets[0]) {
-            setImageUri(result.assets[0].uri);
+        if (!res.canceled && res.assets[0]) {
+            setImageUri(res.assets[0].uri);
             setStep('describe');
         }
     };
@@ -169,53 +157,39 @@ export default function FoodScannerModal({
     const processImage = async () => {
         if (!imageUri) return;
         setStep('analyzing');
-
         try {
-            const analysisResult = await analyzeFood(imageUri, description);
-            setResult(analysisResult);
-            setEditedName(analysisResult.foodName);
+            const res = await analyzeFood(imageUri, description);
+            setResult(res);
+            setEditedName(res.foodName);
             setStep('result');
         } catch (error) {
-            console.error('Analysis error:', error);
-            Alert.alert('Error', 'Failed to analyze image. Please try again.');
+            Alert.alert('Error', 'Analysis failed.');
             resetState();
         }
     };
 
     const processTextOnly = async () => {
-        if (!textOnlyInput.trim()) {
-            Alert.alert('Description Required', 'Please describe what you ate.');
-            return;
-        }
+        if (!textOnlyInput.trim()) return;
         setStep('analyzing');
-
         try {
-            // Use text description only - pass empty string for imageUri
-            const analysisResult = await analyzeFood('', textOnlyInput.trim());
-            setResult(analysisResult);
-            setEditedName(analysisResult.foodName);
+            const res = await analyzeFood('', textOnlyInput.trim());
+            setResult(res);
+            setEditedName(res.foodName);
             setStep('result');
         } catch (error) {
-            console.error('Analysis error:', error);
-            Alert.alert('Error', 'Failed to analyze food description. Please try again.');
+            Alert.alert('Error', 'Analysis failed.');
             resetState();
         }
     };
 
     const handleSave = async () => {
         if (!result) return;
-
-        // Apply portion percentage to macros
         const portionMultiplier = portionPercent / 100;
-
-        // Create timestamp based on selectedDate or current time
-        const timestamp = selectedDate
-            ? new Date(selectedDate + 'T12:00:00').toISOString() // Use noon on selected date
-            : new Date().toISOString();
+        const timestamp = selectedDate ? new Date(selectedDate + 'T12:00:00').toISOString() : new Date().toISOString();
 
         const scannedItem: ScannedItem = {
             id: generateScanId(),
-            imageUri: imageUri || '', // Empty string for text-only entries
+            imageUri: imageUri || '',
             name: editedName || result.foodName,
             timestamp,
             portionPercent,
@@ -233,929 +207,242 @@ export default function FoodScannerModal({
             suggestion: result.suggestion,
         };
 
-        try {
-            await saveScannedItem(scannedItem);
-            onScanComplete(scannedItem);
-            handleClose();
-        } catch (error) {
-            Alert.alert('Error', 'Failed to save scan. Please try again.');
-        }
+        await saveScannedItem(scannedItem);
+        onScanComplete(scannedItem);
+        handleClose();
     };
 
     const renderContent = () => {
         switch (step) {
             case 'select':
                 return (
-                    <ScrollView style={styles.selectScrollView} showsVerticalScrollIndicator={false}>
-                        {/* Header Icon */}
-                        <View style={styles.headerIconContainer}>
-                            <View style={styles.headerIcon}>
-                                <Text style={styles.headerIconEmoji}>📷</Text>
-                            </View>
+                    <View style={styles.selectContainer}>
+                        <View style={styles.header}>
+                            <Text style={styles.headerTitle}>Analyze Food</Text>
+                            <Text style={styles.headerSubtitle}>Identify sugars & macros instantly</Text>
                         </View>
 
-                        <Text style={styles.modalTitle}>Track Your Food</Text>
-                        <Text style={styles.modalSubtitle}>
-                            Scan what you eat to track your sugar intake
-                        </Text>
-
-                        {/* Quick Guide */}
-                        <View style={styles.quickGuide}>
-                            <View style={styles.guideStep}>
-                                <View style={styles.guideStepNumber}>
-                                    <Text style={styles.guideStepNumberText}>1</Text>
+                        <TouchableOpacity style={styles.heroButton} onPress={takePhoto} activeOpacity={0.9}>
+                            <View style={styles.heroContent}>
+                                <View style={styles.shutterRing}><View style={styles.shutterInner} /></View>
+                                <View style={styles.heroTextContainer}>
+                                    <Text style={styles.heroTitle}>Scan Meal</Text>
+                                    <Text style={styles.heroSubtitle}>Capture food to analyze</Text>
                                 </View>
-                                <Text style={styles.guideStepText}>Take a photo of your food</Text>
+                                <Feather name="chevron-right" size={24} color="#FFF" />
                             </View>
-                            <View style={styles.guideStep}>
-                                <View style={styles.guideStepNumber}>
-                                    <Text style={styles.guideStepNumberText}>2</Text>
-                                </View>
-                                <Text style={styles.guideStepText}>AI analyzes nutrition info</Text>
-                            </View>
-                            <View style={styles.guideStep}>
-                                <View style={styles.guideStepNumber}>
-                                    <Text style={styles.guideStepNumberText}>3</Text>
-                                </View>
-                                <Text style={styles.guideStepText}>Adjust portion & save</Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.optionsContainer}>
-                            <TouchableOpacity
-                                style={styles.optionButton}
-                                onPress={takePhoto}
-                                activeOpacity={0.8}
-                            >
-                                <View style={styles.optionIconBg}>
-                                    <Text style={styles.optionEmoji}>📷</Text>
-                                </View>
-                                <Text style={styles.optionText}>Take Photo</Text>
-                                <Text style={styles.optionHint}>Best for accuracy</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={styles.optionButton}
-                                onPress={pickFromGallery}
-                                activeOpacity={0.8}
-                            >
-                                <View style={styles.optionIconBg}>
-                                    <Text style={styles.optionEmoji}>🖼️</Text>
-                                </View>
-                                <Text style={styles.optionText}>Gallery</Text>
-                                <Text style={styles.optionHint}>From saved photos</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        {/* Text-only input option */}
-                        <TouchableOpacity
-                            style={styles.textInputOption}
-                            onPress={() => setStep('text-input')}
-                            activeOpacity={0.8}
-                        >
-                            <View style={styles.textInputOptionIcon}>
-                                <Text style={styles.optionEmoji}>✏️</Text>
-                            </View>
-                            <View style={styles.textInputOptionContent}>
-                                <Text style={styles.textInputOptionTitle}>Describe Your Food</Text>
-                                <Text style={styles.textInputOptionHint}>
-                                    Type what you ate for a quick estimate
-                                </Text>
-                            </View>
-                            <Feather name="chevron-right" size={20} color={looviColors.text.tertiary} />
                         </TouchableOpacity>
 
-                        {/* Recently Scanned Foods */}
+                        <View style={styles.secondaryRow}>
+                            <TouchableOpacity style={styles.secondaryButton} onPress={pickFromGallery}>
+                                <Feather name="image" size={20} color={looviColors.text.primary} />
+                                <Text style={styles.secondaryText}>Gallery</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep('text-input')}>
+                                <Feather name="edit-2" size={20} color={looviColors.text.primary} />
+                                <Text style={styles.secondaryText}>Type</Text>
+                            </TouchableOpacity>
+                        </View>
+
                         {recentFoods.length > 0 && (
                             <View style={styles.recentSection}>
-                                <Text style={styles.recentTitle}>Quick Add - Recent Foods</Text>
-                                <View style={styles.recentList}>
-                                    {recentFoods.map((item) => (
-                                        <TouchableOpacity
-                                            key={item.id}
-                                            style={styles.recentItem}
-                                            onPress={() => quickAddRecent(item)}
-                                            activeOpacity={0.8}
-                                        >
-                                            <View style={styles.recentInfo}>
-                                                <Text style={styles.recentName} numberOfLines={1}>
-                                                    {item.name}
-                                                </Text>
-                                                <Text style={styles.recentMacros}>
-                                                    {item.calories}cal · {item.sugar}g sugar
-                                                </Text>
-                                            </View>
-                                            <Text style={styles.recentAddIcon}>+</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
+                                <Text style={styles.recentHeader}>Recently Logged</Text>
+                                {recentFoods.map((item) => (
+                                    <TouchableOpacity key={item.id} style={styles.recentRow} onPress={() => quickAddRecent(item)}>
+                                        <View style={styles.recentIconWrapper}><Feather name="clock" size={14} color={looviColors.text.tertiary} /></View>
+                                        <View style={styles.recentInfo}>
+                                            <Text style={styles.recentName} numberOfLines={1}>{item.name}</Text>
+                                            <Text style={styles.recentDetails}>{item.calories}Cal • {item.sugar}g Sugar</Text>
+                                        </View>
+                                        <Feather name="plus-circle" size={20} color={looviColors.coralOrange} />
+                                    </TouchableOpacity>
+                                ))}
                             </View>
                         )}
-
-                        <TouchableOpacity style={styles.cancelButton} onPress={handleClose}>
-                            <Text style={styles.cancelText}>Cancel</Text>
-                        </TouchableOpacity>
-                    </ScrollView>
+                    </View>
                 );
 
             case 'describe':
                 return (
-                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                        <View style={styles.describeContainer}>
-                            {imageUri && (
-                                <Image source={{ uri: imageUri }} style={styles.previewImage} />
-                            )}
-                            <Text style={styles.stepTitle}>What is this?</Text>
-                            <Text style={styles.stepSubtitle}>
-                                Add a description to improve accuracy (optional)
-                            </Text>
-
+                    <View style={styles.stepContainer}>
+                        <Image source={{ uri: imageUri! }} style={styles.reviewImage} />
+                        <View style={styles.reviewContent}>
+                            <Text style={styles.stepTitle}>Any specifics?</Text>
                             <TextInput
                                 style={styles.descriptionInput}
-                                placeholder="e.g., Caesar salad with chicken..."
-                                placeholderTextColor={looviColors.text.muted}
+                                placeholder="e.g. 'Low fat', 'No sugar added'..."
                                 value={description}
                                 onChangeText={setDescription}
                                 multiline
-                                returnKeyType="done"
-                                blurOnSubmit={true}
+                                blurOnSubmit
                             />
-
-                            <View style={styles.buttonRow}>
-                                <TouchableOpacity style={styles.skipButton} onPress={() => { setDescription(''); processImage(); }}>
-                                    <Text style={styles.skipText}>Skip</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.continueButton} onPress={processImage}>
-                                    <Text style={styles.continueText}>Analyze Food</Text>
+                            <View style={styles.actionRow}>
+                                <TouchableOpacity style={styles.ghostButton} onPress={processImage}><Text style={styles.ghostButtonText}>Skip</Text></TouchableOpacity>
+                                <TouchableOpacity style={styles.primaryButton} onPress={processImage}>
+                                    <Text style={styles.primaryButtonText}>Analyze</Text>
+                                    <Feather name="arrow-right" size={18} color="#FFF" />
                                 </TouchableOpacity>
                             </View>
                         </View>
-                    </TouchableWithoutFeedback>
+                    </View>
                 );
 
             case 'text-input':
                 return (
-                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                        <KeyboardAvoidingView 
-                            style={styles.textInputContainer}
-                            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                        >
-                            {/* Header */}
-                            <View style={styles.textInputHeader}>
-                                <View style={styles.textInputIconLarge}>
-                                    <Text style={{ fontSize: 40 }}>✏️</Text>
-                                </View>
-                                <Text style={styles.stepTitle}>Describe Your Food</Text>
-                                <Text style={styles.stepSubtitle}>
-                                    Be as detailed as you'd like - more detail means better estimates
-                                </Text>
-                            </View>
-
-                            {/* Input field */}
-                            <TextInput
-                                style={styles.textOnlyInput}
-                                placeholder="e.g., Plate of grilled chicken with rice and steamed broccoli..."
-                                placeholderTextColor={looviColors.text.muted}
-                                value={textOnlyInput}
-                                onChangeText={setTextOnlyInput}
-                                multiline
-                                numberOfLines={4}
-                                textAlignVertical="top"
-                                autoFocus
-                            />
-
-                            {/* Examples */}
-                            <View style={styles.examplesContainer}>
-                                <Text style={styles.examplesTitle}>Examples:</Text>
-                                <TouchableOpacity 
-                                    style={styles.exampleChip}
-                                    onPress={() => setTextOnlyInput('Large bowl of oatmeal with banana and honey')}
-                                >
-                                    <Text style={styles.exampleText}>🥣 Oatmeal with banana</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity 
-                                    style={styles.exampleChip}
-                                    onPress={() => setTextOnlyInput('Grilled chicken sandwich with lettuce and tomato')}
-                                >
-                                    <Text style={styles.exampleText}>🥪 Chicken sandwich</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity 
-                                    style={styles.exampleChip}
-                                    onPress={() => setTextOnlyInput('Slice of pepperoni pizza')}
-                                >
-                                    <Text style={styles.exampleText}>🍕 Pizza slice</Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            {/* Buttons */}
-                            <View style={styles.buttonRow}>
-                                <TouchableOpacity 
-                                    style={styles.skipButton} 
-                                    onPress={() => { setTextOnlyInput(''); setStep('select'); }}
-                                >
-                                    <Text style={styles.skipText}>Back</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity 
-                                    style={[
-                                        styles.continueButton,
-                                        !textOnlyInput.trim() && styles.continueButtonDisabled
-                                    ]} 
-                                    onPress={processTextOnly}
-                                    disabled={!textOnlyInput.trim()}
-                                >
-                                    <Text style={styles.continueText}>Analyze</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </KeyboardAvoidingView>
-                    </TouchableWithoutFeedback>
+                    <View style={styles.stepContainer}>
+                        <View style={styles.header}><Text style={styles.headerTitle}>Type Entry</Text></View>
+                        <TextInput
+                            style={styles.textOnlyInput}
+                            placeholder="What did you eat?"
+                            value={textOnlyInput}
+                            onChangeText={setTextOnlyInput}
+                            multiline
+                            autoFocus
+                        />
+                        <View style={styles.bottomActions}>
+                            <TouchableOpacity onPress={() => setStep('select')}><Text style={styles.ghostButtonText}>Back</Text></TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.primaryButton, !textOnlyInput.trim() && { opacity: 0.5 }]}
+                                onPress={processTextOnly}
+                                disabled={!textOnlyInput.trim()}
+                            >
+                                <Text style={styles.primaryButtonText}>Analyze</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
                 );
 
             case 'analyzing':
                 return (
-                    <View style={styles.analyzingWrapper}>
-                        {imageUri ? (
-                            <Image source={{ uri: imageUri }} style={styles.previewImage} />
-                        ) : (
-                            <View style={styles.textAnalyzingIcon}>
-                                <Text style={{ fontSize: 48 }}>🔍</Text>
-                            </View>
-                        )}
-                        <View style={styles.analyzingContainer}>
-                            <ActivityIndicator size="large" color={looviColors.coralOrange} />
-                            <Text style={styles.analyzingText}>Analyzing food...</Text>
-                            <Text style={styles.analyzingHint}>
-                                {imageUri ? 'Detecting nutritional content' : 'Estimating from your description'}
-                            </Text>
-                        </View>
+                    <View style={styles.centerContainer}>
+                        <ActivityIndicator size="large" color={looviColors.coralOrange} />
+                        <Text style={styles.analyzingTitle}>Identifying...</Text>
                     </View>
                 );
 
             case 'result':
                 const healthColor = result ? getHealthScoreColor(result.healthScore) : looviColors.accent.success;
                 return (
-                    <ScrollView showsVerticalScrollIndicator={false} style={styles.resultScroll}>
-                        {imageUri ? (
-                            <Image source={{ uri: imageUri }} style={styles.previewImage} />
-                        ) : (
-                            <View style={styles.textResultIcon}>
-                                <Text style={{ fontSize: 40 }}>🍽️</Text>
-                            </View>
-                        )}
-                        {result && (
-                            <View style={styles.resultContainer}>
-                                {/* Food Name (Editable) */}
-                                {isEditing ? (
-                                    <TextInput
-                                        style={styles.nameInput}
-                                        value={editedName}
-                                        onChangeText={setEditedName}
-                                        autoFocus
-                                        onBlur={() => setIsEditing(false)}
-                                    />
-                                ) : (
-                                    <TouchableOpacity onPress={() => setIsEditing(true)}>
-                                        <Text style={styles.foodName}>{editedName || result.foodName}</Text>
-                                        <Text style={styles.tapToEdit}>Tap to edit</Text>
-                                    </TouchableOpacity>
-                                )}
-
-                                {/* Health Score */}
-                                <View style={[styles.healthScoreBadge, { backgroundColor: `${healthColor}15` }]}>
-                                    <Text style={[styles.healthScoreValue, { color: healthColor }]}>
-                                        {result.healthScore}
-                                    </Text>
-                                    <Text style={styles.healthScoreLabel}>/10 Health Score</Text>
-                                </View>
-
-                                {/* Portion Slider */}
-                                <View style={styles.portionSection}>
-                                    <Text style={styles.sectionLabel}>How much did you eat?</Text>
-                                    <View style={styles.portionMarkers}>
-                                        {[0, 25, 50, 75, 100].map(p => (
-                                            <Text key={p} style={[
-                                                styles.portionMarker,
-                                                portionPercent === p && styles.portionMarkerActive
-                                            ]}>{p}%</Text>
-                                        ))}
-                                    </View>
-                                    <Slider
-                                        style={styles.slider}
-                                        minimumValue={0}
-                                        maximumValue={100}
-                                        step={25}
-                                        value={portionPercent}
-                                        onValueChange={setPortionPercent}
-                                        minimumTrackTintColor={looviColors.coralOrange}
-                                        maximumTrackTintColor="rgba(0,0,0,0.1)"
-                                        thumbTintColor={looviColors.coralOrange}
-                                    />
-                                </View>
-
-                                {/* Macro Summary */}
-                                <View style={styles.macroGrid}>
-                                    <View style={styles.macroItem}>
-                                        <Text style={styles.macroValue}>{Math.round(result.calories * portionPercent / 100)}</Text>
-                                        <Text style={styles.macroLabel}>kcal</Text>
-                                    </View>
-                                    <View style={styles.macroItem}>
-                                        <Text style={styles.macroValue}>{(result.protein * portionPercent / 100).toFixed(1)}g</Text>
-                                        <Text style={styles.macroLabel}>Protein</Text>
-                                    </View>
-                                    <View style={styles.macroItem}>
-                                        <Text style={styles.macroValue}>{(result.carbs * portionPercent / 100).toFixed(1)}g</Text>
-                                        <Text style={styles.macroLabel}>Carbs</Text>
-                                    </View>
-                                    <View style={styles.macroItem}>
-                                        <Text style={styles.macroValue}>{(result.fat * portionPercent / 100).toFixed(1)}g</Text>
-                                        <Text style={styles.macroLabel}>Fat</Text>
-                                    </View>
-                                    <View style={styles.macroItem}>
-                                        <Text style={[styles.macroValue, { color: result.sugar > 15 ? '#EF4444' : looviColors.text.primary }]}>
-                                            {(result.sugar * portionPercent / 100).toFixed(1)}g
-                                        </Text>
-                                        <Text style={styles.macroLabel}>Sugar</Text>
-                                    </View>
-                                    <View style={styles.macroItem}>
-                                        <Text style={styles.macroValue}>{(result.fiber * portionPercent / 100).toFixed(1)}g</Text>
-                                        <Text style={styles.macroLabel}>Fiber</Text>
-                                    </View>
-                                </View>
-
-                                {result.suggestion && (
-                                    <Text style={styles.suggestion}>{result.suggestion}</Text>
-                                )}
-
-                                <View style={styles.resultButtons}>
-                                    <TouchableOpacity
-                                        style={styles.retryButton}
-                                        onPress={resetState}
-                                    >
-                                        <Text style={styles.retryText}>Scan Again</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={styles.saveButton}
-                                        onPress={handleSave}
-                                    >
-                                        <Text style={styles.saveText}>Save</Text>
-                                    </TouchableOpacity>
+                    <View style={styles.resultContainer}>
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            <View style={styles.resultHeader}>
+                                {imageUri ? <Image source={{ uri: imageUri }} style={styles.resultImage} /> : <View style={styles.resultPlaceholder}><Feather name="list" size={40} color={looviColors.text.muted} /></View>}
+                                <View style={styles.resultTitleOverlay}>
+                                    <Text style={styles.resultFoodName}>{editedName || result?.foodName}</Text>
                                 </View>
                             </View>
-                        )}
-                    </ScrollView>
+                            <View style={styles.resultBody}>
+                                <View style={styles.scoreCard}>
+                                    <View style={styles.scoreLeft}>
+                                        <Text style={styles.scoreLabel}>Health Score</Text>
+                                        <Text style={[styles.scoreValue, { color: healthColor }]}>{result?.healthScore}<Text style={styles.scoreTotal}>/10</Text></Text>
+                                    </View>
+                                    <View style={styles.scoreRight}>
+                                        <Text style={styles.sugarValue}>{(result ? result.sugar * portionPercent / 100 : 0).toFixed(1)}g</Text>
+                                        <Text style={styles.sugarLabel}>Sugar</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Portion</Text><Text style={styles.sectionValue}>{portionPercent}%</Text></View>
+                                <Slider style={styles.slider} minimumValue={0} maximumValue={150} step={10} value={portionPercent} onValueChange={setPortionPercent} minimumTrackTintColor={looviColors.coralOrange} thumbTintColor={looviColors.coralOrange} />
+                                <View style={styles.macrosGrid}>
+                                    <View style={styles.macroBox}><Text style={styles.macroVal}>{Math.round((result?.calories || 0) * portionPercent / 100)}</Text><Text style={styles.macroLbl}>kcal</Text></View>
+                                    <View style={styles.macroBox}><Text style={styles.macroVal}>{((result?.protein || 0) * portionPercent / 100).toFixed(1)}</Text><Text style={styles.macroLbl}>Prot</Text></View>
+                                    <View style={styles.macroBox}><Text style={styles.macroVal}>{((result?.carbs || 0) * portionPercent / 100).toFixed(1)}</Text><Text style={styles.macroLbl}>Carb</Text></View>
+                                    <View style={styles.macroBox}><Text style={styles.macroVal}>{((result?.fat || 0) * portionPercent / 100).toFixed(1)}</Text><Text style={styles.macroLbl}>Fat</Text></View>
+                                </View>
+                            </View>
+                        </ScrollView>
+                        <View style={styles.resultFooter}>
+                            <TouchableOpacity style={styles.retryButton} onPress={resetState}><Feather name="refresh-ccw" size={20} color={looviColors.text.tertiary} /></TouchableOpacity>
+                            <TouchableOpacity style={styles.saveButtonFull} onPress={handleSave}><Text style={styles.saveButtonText}>Log Food</Text><Feather name="check" size={20} color="#FFF" /></TouchableOpacity>
+                        </View>
+                    </View>
                 );
         }
     };
 
     return (
-        <Modal
-            visible={visible}
-            transparent
-            animationType="fade"
-            onRequestClose={handleClose}
-        >
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={styles.keyboardAvoidingView}
-            >
-                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                    <View style={styles.overlay}>
-                        <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-                            <View style={styles.modalCard}>
-                                {/* Close Button */}
-                                <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-                                    <Feather name="x" size={20} color={looviColors.text.secondary} />
-                                </TouchableOpacity>
-                                
-                                {renderContent()}
-                            </View>
-                        </TouchableWithoutFeedback>
+        <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+            <View style={styles.modalRoot}>
+                <TouchableWithoutFeedback onPress={handleClose}><View style={styles.backdrop} /></TouchableWithoutFeedback>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
+                    <View style={styles.modalCard}>
+                        <View style={styles.dragHandle} />
+                        {step === 'select' && <TouchableOpacity style={styles.closeBtn} onPress={handleClose}><Feather name="x" size={20} color={looviColors.text.secondary} /></TouchableOpacity>}
+                        {renderContent()}
                     </View>
-                </TouchableWithoutFeedback>
-            </KeyboardAvoidingView>
+                </KeyboardAvoidingView>
+            </View>
         </Modal>
     );
 }
 
 const styles = StyleSheet.create({
-    keyboardAvoidingView: {
-        flex: 1,
-    },
-    overlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: spacing.lg,
-    },
-    modalCard: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 24,
-        maxHeight: '90%',
-        width: '100%',
-        maxWidth: 420,
-        overflow: 'hidden',
-    },
-    describeContainer: {
-        // Container for describe step
-    },
-    closeButton: {
-        position: 'absolute',
-        top: spacing.md,
-        right: spacing.md,
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: 'rgba(0, 0, 0, 0.05)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 10,
-    },
-    closeText: {
-        fontSize: 20,
-        color: looviColors.text.primary,
-    },
-    selectScrollView: {
-        padding: spacing.xl,
-        paddingTop: spacing.xl + 8,
-    },
-    headerIconContainer: {
-        alignItems: 'center',
-        marginBottom: spacing.lg,
-    },
-    headerIcon: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: 'rgba(232, 168, 124, 0.15)',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    headerIconEmoji: {
-        fontSize: 40,
-    },
-    modalTitle: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-        marginBottom: spacing.xs,
-        textAlign: 'center',
-    },
-    modalSubtitle: {
-        fontSize: 15,
-        fontWeight: '400',
-        color: looviColors.text.secondary,
-        marginBottom: spacing.lg,
-        textAlign: 'center',
-        lineHeight: 22,
-    },
-    quickGuide: {
-        backgroundColor: 'rgba(0, 0, 0, 0.03)',
-        borderRadius: borderRadius.xl,
-        padding: spacing.md,
-        marginBottom: spacing.lg,
-        gap: spacing.sm,
-    },
-    guideStep: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    guideStepNumber: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: looviColors.coralOrange,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: spacing.sm,
-    },
-    guideStepNumberText: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#FFFFFF',
-    },
-    guideStepText: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: looviColors.text.secondary,
-        flex: 1,
-    },
-    optionsContainer: {
-        flexDirection: 'row',
-        gap: spacing.md,
-        marginBottom: spacing.md,
-    },
-    optionButton: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.03)',
-        borderRadius: borderRadius.xl,
-        padding: spacing.lg,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(0, 0, 0, 0.06)',
-    },
-    optionIconBg: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        backgroundColor: 'rgba(232, 168, 124, 0.15)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: spacing.sm,
-    },
-    optionEmoji: {
-        fontSize: 28,
-    },
-    optionText: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-        marginBottom: 2,
-    },
-    optionHint: {
-        fontSize: 11,
-        fontWeight: '400',
-        color: looviColors.text.muted,
-    },
-    // Text input option (in select step)
-    textInputOption: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.03)',
-        borderRadius: borderRadius.xl,
-        padding: spacing.md,
-        marginBottom: spacing.lg,
-        borderWidth: 1,
-        borderColor: 'rgba(0, 0, 0, 0.06)',
-    },
-    textInputOptionIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(232, 168, 124, 0.15)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: spacing.md,
-    },
-    textInputOptionContent: {
-        flex: 1,
-    },
-    textInputOptionTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: looviColors.text.primary,
-        marginBottom: 2,
-    },
-    textInputOptionHint: {
-        fontSize: 12,
-        fontWeight: '400',
-        color: looviColors.text.muted,
-    },
-    // Text-only input step
-    textInputContainer: {
-        flex: 1,
-        padding: spacing.xl,
-        paddingTop: spacing.xl + 8,
-    },
-    textInputHeader: {
-        alignItems: 'center',
-        marginBottom: spacing.lg,
-    },
-    textInputIconLarge: {
-        width: 70,
-        height: 70,
-        borderRadius: 35,
-        backgroundColor: 'rgba(232, 168, 124, 0.15)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: spacing.md,
-    },
-    textOnlyInput: {
-        backgroundColor: 'rgba(0, 0, 0, 0.03)',
-        borderRadius: borderRadius.xl,
-        padding: spacing.lg,
-        fontSize: 15,
-        color: looviColors.text.primary,
-        minHeight: 100,
-        textAlignVertical: 'top',
-        borderWidth: 1,
-        borderColor: 'rgba(0, 0, 0, 0.06)',
-        marginBottom: spacing.md,
-    },
-    examplesContainer: {
-        marginBottom: spacing.lg,
-    },
-    examplesTitle: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: looviColors.text.muted,
-        marginBottom: spacing.sm,
-    },
-    exampleChip: {
-        backgroundColor: 'rgba(0, 0, 0, 0.03)',
-        borderRadius: borderRadius.lg,
-        paddingVertical: spacing.sm,
-        paddingHorizontal: spacing.md,
-        marginBottom: spacing.xs,
-    },
-    exampleText: {
-        fontSize: 13,
-        color: looviColors.text.secondary,
-    },
-    continueButtonDisabled: {
-        opacity: 0.5,
-    },
-    cancelButton: {
-        paddingVertical: spacing.sm,
-        alignItems: 'center',
-    },
-    cancelText: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: looviColors.text.muted,
-    },
-    previewImage: {
-        width: '100%',
-        height: 160,
-        borderRadius: borderRadius.xl,
-        marginBottom: spacing.md,
-    },
-    stepTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-        textAlign: 'center',
-        marginBottom: spacing.xs,
-    },
-    stepSubtitle: {
-        fontSize: 13,
-        fontWeight: '400',
-        color: looviColors.text.secondary,
-        textAlign: 'center',
-        marginBottom: spacing.md,
-    },
-    descriptionInput: {
-        backgroundColor: 'rgba(0, 0, 0, 0.03)',
-        borderRadius: borderRadius.lg,
-        padding: spacing.md,
-        fontSize: 15,
-        color: looviColors.text.primary,
-        minHeight: 70,
-        textAlignVertical: 'top',
-        marginBottom: spacing.md,
-        borderWidth: 1,
-        borderColor: 'rgba(0, 0, 0, 0.06)',
-    },
-    buttonRow: {
-        flexDirection: 'row',
-        gap: spacing.md,
-    },
-    skipButton: {
-        flex: 1,
-        paddingVertical: 14,
-        borderRadius: borderRadius.xl,
-        alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    },
-    skipText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: looviColors.text.secondary,
-    },
-    continueButton: {
-        flex: 2,
-        paddingVertical: 14,
-        borderRadius: borderRadius.xl,
-        alignItems: 'center',
-        backgroundColor: looviColors.coralOrange,
-    },
-    continueText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: '#FFFFFF',
-    },
-    analyzingWrapper: {
-        padding: spacing.xl,
-        paddingTop: spacing['3xl'],
-        alignItems: 'center',
-    },
-    textAnalyzingIcon: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: 100,
-        marginBottom: spacing.md,
-    },
-    textResultIcon: {
-        width: 70,
-        height: 70,
-        borderRadius: 35,
-        backgroundColor: 'rgba(232, 168, 124, 0.15)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        alignSelf: 'center',
-        marginBottom: spacing.md,
-    },
-    analyzingContainer: {
-        alignItems: 'center',
-        paddingVertical: spacing.xl,
-    },
-    analyzingText: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: looviColors.text.primary,
-        marginTop: spacing.md,
-    },
-    analyzingHint: {
-        fontSize: 13,
-        fontWeight: '400',
-        color: looviColors.text.muted,
-        marginTop: spacing.xs,
-    },
-    resultScroll: {
-        maxHeight: '100%',
-        padding: spacing.xl,
-        paddingTop: spacing.xl + 8,
-    },
-    resultContainer: {
-        alignItems: 'center',
-    },
-    foodName: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-        textAlign: 'center',
-    },
-    tapToEdit: {
-        fontSize: 11,
-        fontWeight: '400',
-        color: looviColors.text.muted,
-        textAlign: 'center',
-        marginBottom: spacing.md,
-    },
-    nameInput: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-        textAlign: 'center',
-        borderBottomWidth: 2,
-        borderBottomColor: looviColors.coralOrange,
-        paddingBottom: spacing.xs,
-        marginBottom: spacing.md,
-    },
-    healthScoreBadge: {
-        flexDirection: 'row',
-        alignItems: 'baseline',
-        justifyContent: 'center',
-        paddingVertical: spacing.sm,
-        paddingHorizontal: spacing.lg,
-        borderRadius: borderRadius.xl,
-        marginBottom: spacing.md,
-    },
-    healthScoreValue: {
-        fontSize: 32,
-        fontWeight: '800',
-    },
-    healthScoreLabel: {
-        fontSize: 13,
-        fontWeight: '500',
-        color: looviColors.text.secondary,
-        marginLeft: spacing.xs,
-    },
-    portionSection: {
-        width: '100%',
-        marginBottom: spacing.md,
-    },
-    sectionLabel: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: looviColors.text.primary,
-        marginBottom: spacing.xs,
-        textAlign: 'center',
-    },
-    portionMarkers: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: spacing.xs,
-    },
-    portionMarker: {
-        fontSize: 11,
-        fontWeight: '500',
-        color: looviColors.text.muted,
-    },
-    portionMarkerActive: {
-        color: looviColors.coralOrange,
-        fontWeight: '700',
-    },
-    slider: {
-        width: '100%',
-        height: 40,
-    },
-    macroGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'center',
-        gap: spacing.sm,
-        marginBottom: spacing.md,
-    },
-    macroItem: {
-        backgroundColor: 'rgba(0, 0, 0, 0.03)',
-        borderRadius: borderRadius.md,
-        paddingVertical: spacing.sm,
-        paddingHorizontal: spacing.md,
-        alignItems: 'center',
-        minWidth: 65,
-        borderWidth: 1,
-        borderColor: 'rgba(0, 0, 0, 0.06)',
-    },
-    macroValue: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-    },
-    macroLabel: {
-        fontSize: 10,
-        fontWeight: '500',
-        color: looviColors.text.muted,
-        marginTop: 2,
-    },
-    suggestion: {
-        fontSize: 12,
-        fontWeight: '400',
-        color: looviColors.text.secondary,
-        textAlign: 'center',
-        fontStyle: 'italic',
-        marginBottom: spacing.md,
-    },
-    resultButtons: {
-        flexDirection: 'row',
-        gap: spacing.md,
-        width: '100%',
-    },
-    retryButton: {
-        flex: 1,
-        paddingVertical: 14,
-        borderRadius: borderRadius.xl,
-        alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    },
-    retryText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: looviColors.text.secondary,
-    },
-    saveButton: {
-        flex: 1,
-        paddingVertical: 14,
-        borderRadius: borderRadius.xl,
-        alignItems: 'center',
-        backgroundColor: looviColors.coralOrange,
-    },
-    saveText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: '#FFFFFF',
-    },
-    // Recently scanned foods styles
-    recentSection: {
-        marginTop: spacing.lg,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(0, 0, 0, 0.06)',
-        paddingTop: spacing.md,
-    },
-    recentTitle: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: looviColors.text.secondary,
-        marginBottom: spacing.sm,
-    },
-    recentList: {
-        gap: spacing.xs,
-    },
-    recentItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: spacing.sm,
-        paddingHorizontal: spacing.md,
-        backgroundColor: 'rgba(0, 0, 0, 0.03)',
-        borderRadius: borderRadius.md,
-    },
-    recentInfo: {
-        flex: 1,
-    },
-    recentName: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: looviColors.text.primary,
-        marginBottom: 2,
-    },
-    recentMacros: {
-        fontSize: 12,
-        fontWeight: '400',
-        color: looviColors.text.muted,
-    },
-    recentAddIcon: {
-        fontSize: 20,
-        fontWeight: '600',
-        color: looviColors.coralOrange,
-        paddingHorizontal: spacing.sm,
-    },
+    modalRoot: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'transparent' },
+    backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+    keyboardView: { width: '100%', alignItems: 'center' },
+    modalCard: { width: '100%', maxWidth: 450, backgroundColor: '#FFF', borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingBottom: spacing.xl },
+    dragHandle: { width: 40, height: 4, backgroundColor: '#E0E0E0', borderRadius: 2, alignSelf: 'center', marginVertical: 12 },
+    closeBtn: { position: 'absolute', top: 16, right: 20, zIndex: 10, padding: 8, backgroundColor: '#F5F5F5', borderRadius: 20 },
+    selectContainer: { padding: spacing.lg, paddingTop: spacing.sm },
+    header: { marginBottom: spacing.lg, alignItems: 'center' },
+    headerTitle: { fontSize: 20, fontWeight: '800', color: looviColors.text.primary, marginBottom: 4 },
+    headerSubtitle: { fontSize: 13, color: looviColors.text.tertiary },
+    heroButton: { height: 130, borderRadius: 24, backgroundColor: looviColors.coralOrange, marginBottom: spacing.md, overflow: 'hidden' },
+    heroContent: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.xl },
+    shutterRing: { width: 50, height: 50, borderRadius: 25, borderWidth: 3, borderColor: '#FFF', padding: 4, marginRight: spacing.md },
+    shutterInner: { flex: 1, backgroundColor: '#FFF', borderRadius: 20 },
+    heroTextContainer: { flex: 1 },
+    heroTitle: { fontSize: 22, fontWeight: '800', color: '#FFF' },
+    heroSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
+    secondaryRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xl },
+    secondaryButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F7F7F7', paddingVertical: 16, borderRadius: 16, borderWidth: 1, borderColor: '#EEE' },
+    secondaryText: { marginLeft: 8, fontSize: 15, fontWeight: '600', color: looviColors.text.primary },
+    recentSection: { marginTop: spacing.sm },
+    recentHeader: { fontSize: 11, fontWeight: '800', color: looviColors.text.muted, marginBottom: spacing.sm, textTransform: 'uppercase' },
+    recentRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
+    recentIconWrapper: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#F9F9F9', alignItems: 'center', justifyContent: 'center', marginRight: spacing.md },
+    recentInfo: { flex: 1 },
+    recentName: { fontSize: 15, fontWeight: '600', color: looviColors.text.primary },
+    recentDetails: { fontSize: 12, color: looviColors.text.tertiary },
+    stepContainer: { width: '100%', minHeight: 400 }, // increased minHeight
+    reviewImage: { width: '100%', height: 250 },
+    reviewContent: { padding: spacing.lg },
+    stepTitle: { fontSize: 20, fontWeight: '700', color: looviColors.text.primary, marginBottom: 12 },
+    descriptionInput: { backgroundColor: '#F9F9F9', borderRadius: 12, padding: spacing.md, fontSize: 16, minHeight: 80, marginBottom: spacing.xl },
+    actionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    ghostButtonText: { fontSize: 16, color: looviColors.text.tertiary, fontWeight: '600' },
+    primaryButton: { backgroundColor: looviColors.coralOrange, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, flexDirection: 'row', alignItems: 'center' },
+    primaryButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700', marginRight: 8 },
+    textOnlyInput: { backgroundColor: '#F9F9F9', borderRadius: 16, padding: spacing.md, fontSize: 18, minHeight: 120, marginHorizontal: spacing.lg, marginBottom: spacing.lg },
+    bottomActions: { flexDirection: 'row', justifyContent: 'space-between', padding: spacing.lg },
+    centerContainer: { padding: 60, alignItems: 'center' },
+    analyzingTitle: { fontSize: 18, fontWeight: '600', marginTop: 16 },
+    resultContainer: { width: '100%' },
+    resultHeader: { width: '100%', height: 200 },
+    resultImage: { width: '100%', height: '100%' },
+    resultPlaceholder: { width: '100%', height: '100%', backgroundColor: '#EEE', alignItems: 'center', justifyContent: 'center' },
+    resultTitleOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: 'rgba(0,0,0,0.4)' },
+    resultFoodName: { fontSize: 22, fontWeight: '700', color: '#FFF' },
+    resultBody: { padding: spacing.lg },
+    scoreCard: { flexDirection: 'row', backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#EEE' },
+    scoreLeft: { flex: 1 },
+    scoreLabel: { fontSize: 12, color: looviColors.text.tertiary, fontWeight: '600' },
+    scoreValue: { fontSize: 32, fontWeight: '800' },
+    scoreTotal: { fontSize: 16, color: looviColors.text.muted },
+    scoreRight: { alignItems: 'flex-end', justifyContent: 'center' },
+    sugarValue: { fontSize: 18, fontWeight: '700', color: looviColors.text.primary },
+    sugarLabel: { fontSize: 12, color: looviColors.text.muted },
+    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+    sectionTitle: { fontSize: 15, fontWeight: '600' },
+    sectionValue: { fontSize: 15, fontWeight: '700', color: looviColors.coralOrange },
+    slider: { width: '100%', height: 40, marginBottom: 20 },
+    macrosGrid: { flexDirection: 'row', justifyContent: 'space-between' },
+    macroBox: { alignItems: 'center', flex: 1 },
+    macroVal: { fontSize: 16, fontWeight: '700' },
+    macroLbl: { fontSize: 11, color: looviColors.text.tertiary },
+    resultFooter: { flexDirection: 'row', padding: spacing.lg, gap: 12 },
+    retryButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' },
+    saveButtonFull: { flex: 1, backgroundColor: looviColors.coralOrange, borderRadius: 24, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' },
+    saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700', marginRight: 8 },
 });
