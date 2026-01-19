@@ -23,7 +23,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { spacing, borderRadius } from '../theme';
+import { spacing, borderRadius, typography } from '../theme';
 import LooviBackground, { looviColors } from '../components/LooviBackground';
 import { GlassCard } from '../components/GlassCard';
 import { SwipeableTabView } from '../components/SwipeableTabView';
@@ -674,8 +674,8 @@ const styles = StyleSheet.create({
         paddingBottom: spacing.sm,
     },
     title: {
+        fontFamily: typography.fonts.heading.bold,
         fontSize: 28,
-        fontWeight: '700',
         color: looviColors.text.primary,
         letterSpacing: -0.5,
     },
@@ -722,8 +722,8 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     tabText: {
+        fontFamily: typography.fonts.heading.semibold,
         fontSize: 14,
-        fontWeight: '600',
         color: looviColors.text.muted,
     },
     tabTextActive: {
@@ -837,8 +837,8 @@ const styles = StyleSheet.create({
         padding: spacing.xs,
     },
     postTitle: {
+        fontFamily: typography.fonts.heading.bold,
         fontSize: 16,
-        fontWeight: '700',
         color: looviColors.text.primary,
         marginBottom: spacing.xs,
     },
@@ -910,8 +910,8 @@ const styles = StyleSheet.create({
         marginBottom: spacing.md,
     },
     sectionTitle: {
+        fontFamily: typography.fonts.heading.semibold,
         fontSize: 16,
-        fontWeight: '700',
         color: looviColors.text.primary,
     },
     friendCard: {
@@ -1020,8 +1020,8 @@ const styles = StyleSheet.create({
         marginBottom: spacing.md,
     },
     leaderboardTitle: {
+        fontFamily: typography.fonts.heading.semibold,
         fontSize: 18,
-        fontWeight: '700',
         color: looviColors.text.primary,
     },
     timeFilter: {
@@ -1066,8 +1066,8 @@ const styles = StyleSheet.create({
         marginLeft: spacing.md,
     },
     leaderboardName: {
+        fontFamily: typography.fonts.heading.semibold,
         fontSize: 15,
-        fontWeight: '600',
         color: looviColors.text.primary,
         marginBottom: 4,
     },
@@ -1109,8 +1109,8 @@ const styles = StyleSheet.create({
         marginBottom: spacing.sm,
     },
     yourRankTitle: {
+        fontFamily: typography.fonts.heading.bold,
         fontSize: 14,
-        fontWeight: '700',
         color: looviColors.accent.primary,
     },
     rankBadgeInfo: {

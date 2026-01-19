@@ -29,8 +29,8 @@ const firebaseConfig = {
 };
 
 // Check if Firebase is properly configured (just check the loaded values, not env vars directly)
-const isFirebaseConfigured = 
-    firebaseConfig.apiKey !== 'YOUR_API_KEY' && 
+const isFirebaseConfigured =
+    firebaseConfig.apiKey !== 'YOUR_API_KEY' &&
     firebaseConfig.projectId !== 'YOUR_PROJECT_ID' &&
     firebaseConfig.apiKey.length > 10; // Valid API keys are long
 
@@ -55,7 +55,7 @@ const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : get
 let auth: Auth;
 try {
     auth = initializeAuth(app, {
-        persistence: getReactNativePersistence(ReactNativeAsyncStorage)
+        persistence: (getReactNativePersistence as any)(ReactNativeAsyncStorage)
     });
     console.log('🔐 Firebase Auth initialized with AsyncStorage persistence');
 } catch (error: any) {
@@ -69,20 +69,19 @@ try {
     }
 }
 
-// Initialize Firestore with optimized settings
+// Initialize Firestore with settings optimized for Expo/React Native
+// NOTE: This project uses a database with ID 'default' (literal string) not '(default)' (reserved)
 let db: Firestore;
 try {
     db = initializeFirestore(app, {
-        // Try without long polling first - it can cause issues in some environments
-        experimentalAutoDetectLongPolling: true, // Auto-detect if long polling is needed
-        cacheSizeBytes: 50 * 1024 * 1024, // 50MB cache
-    });
-    console.log('🔥 Firestore initialized with auto-detect polling');
+        experimentalAutoDetectLongPolling: true,
+    }, 'default'); // Explicitly specify the database ID
+    console.log('🔥 Firestore initialized with database ID: default');
 } catch (error) {
     // If already initialized, get existing instance
     console.log('⚠️ Firestore already initialized, getting existing instance');
     const { getFirestore } = require('firebase/firestore');
-    db = getFirestore(app);
+    db = getFirestore(app, 'default'); // Explicitly specify the database ID
 }
 
 console.log('🔥 Firestore initialized for project:', firebaseConfig.projectId);

@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     text: {
-        fontWeight: typography.weights.semibold,
+        fontFamily: typography.fonts.body.semibold,
         letterSpacing: 0.3,
     },
 });

@@ -16,12 +16,13 @@ import {
     TouchableOpacity,
     ScrollView,
     Platform,
+    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, Feather } from '@expo/vector-icons';
-import { spacing, borderRadius } from '../theme';
+import { spacing, borderRadius, typography } from '../theme';
 import LooviBackground, { looviColors } from '../components/LooviBackground';
 import { GlassCard } from '../components/GlassCard';
 import { AppIcon } from '../components/OnboardingIcon';
@@ -458,8 +459,8 @@ const styles = StyleSheet.create({
         marginBottom: spacing.xl,
     },
     title: {
+        fontFamily: typography.fonts.heading.bold,
         fontSize: 28,
-        fontWeight: '700',
         color: looviColors.text.primary,
         letterSpacing: -0.5,
     },
@@ -496,8 +497,8 @@ const styles = StyleSheet.create({
         marginBottom: spacing.xs,
     },
     buttonText: {
+        fontFamily: typography.fonts.heading.bold,
         fontSize: 16,
-        fontWeight: '700',
         color: '#FFFFFF',
     },
     buttonBadge: {
@@ -526,8 +527,8 @@ const styles = StyleSheet.create({
         marginBottom: spacing.md,
     },
     selectedDayTitle: {
+        fontFamily: typography.fonts.heading.semibold,
         fontSize: 18,
-        fontWeight: '700',
         color: looviColors.text.primary,
     },
     listCard: {
@@ -545,8 +546,8 @@ const styles = StyleSheet.create({
         gap: spacing.xs,
     },
     listTitle: {
+        fontFamily: typography.fonts.heading.semibold,
         fontSize: 16,
-        fontWeight: '700',
         color: looviColors.text.primary,
     },
     addButton: {
@@ -615,8 +616,8 @@ const styles = StyleSheet.create({
         marginBottom: spacing.md,
     },
     wellnessTitle: {
+        fontFamily: typography.fonts.heading.semibold,
         fontSize: 16,
-        fontWeight: '700',
         color: looviColors.text.primary,
     },
     wellnessMetrics: {

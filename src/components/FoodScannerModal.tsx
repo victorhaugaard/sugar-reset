@@ -35,6 +35,9 @@ import {
     AnalysisResult,
     getHealthScoreColor,
     getScannedItems,
+    getPinnedItems,
+    pinItem,
+    unpinItem,
 } from '../services/scannerService';
 
 interface FoodScannerModalProps {
@@ -60,6 +63,7 @@ export default function FoodScannerModal({
     const [portionPercent, setPortionPercent] = useState(100);
     const [editedName, setEditedName] = useState('');
     const [isEditing, setIsEditing] = useState(false);
+    const [pinnedFoods, setPinnedFoods] = useState<ScannedItem[]>([]);
     const [recentFoods, setRecentFoods] = useState<ScannedItem[]>([]);
 
     // Load recent foods when modal opens
@@ -71,11 +75,18 @@ export default function FoodScannerModal({
 
     const loadRecentFoods = async () => {
         try {
+            // Load pinned items first
+            const pinned = await getPinnedItems();
+            setPinnedFoods(pinned);
+
+            // Load all scanned items
             const items = await getScannedItems();
-            // Get unique items by name, most recent first, limit to 10
+
+            // Get unique items by name, most recent first, excluding pinned ones
+            const pinnedNames = new Set(pinned.map(p => p.name));
             const uniqueMap = new Map<string, ScannedItem>();
             items.forEach(item => {
-                if (!uniqueMap.has(item.name)) {
+                if (!uniqueMap.has(item.name) && !pinnedNames.has(item.name)) {
                     uniqueMap.set(item.name, item);
                 }
             });
@@ -325,28 +336,79 @@ export default function FoodScannerModal({
                             <Feather name="chevron-right" size={20} color={looviColors.text.tertiary} />
                         </TouchableOpacity>
 
+                        {/* Pinned Foods - Always shown first */}
+                        {pinnedFoods.length > 0 && (
+                            <View style={styles.recentSection}>
+                                <View style={styles.sectionHeaderRow}>
+                                    <Text style={styles.pinnedTitle}>📌 Pinned Foods</Text>
+                                </View>
+                                <View style={styles.recentList}>
+                                    {pinnedFoods.map((item) => (
+                                        <View key={item.id} style={styles.recentItemWithPin}>
+                                            <TouchableOpacity
+                                                style={styles.recentItemMain}
+                                                onPress={() => quickAddRecent(item)}
+                                                activeOpacity={0.8}
+                                            >
+                                                <View style={styles.recentInfo}>
+                                                    <Text style={styles.recentName} numberOfLines={1}>
+                                                        {item.name}
+                                                    </Text>
+                                                    <Text style={styles.recentMacros}>
+                                                        {item.calories}cal · {item.sugar}g sugar
+                                                    </Text>
+                                                </View>
+                                                <Text style={styles.recentAddIcon}>+</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={styles.pinButton}
+                                                onPress={async () => {
+                                                    await unpinItem(item.name);
+                                                    loadRecentFoods();
+                                                }}
+                                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                            >
+                                                <Text style={styles.pinIconActive}>📌</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
+
                         {/* Recently Scanned Foods */}
                         {recentFoods.length > 0 && (
                             <View style={styles.recentSection}>
                                 <Text style={styles.recentTitle}>Quick Add - Recent Foods</Text>
                                 <View style={styles.recentList}>
                                     {recentFoods.map((item) => (
-                                        <TouchableOpacity
-                                            key={item.id}
-                                            style={styles.recentItem}
-                                            onPress={() => quickAddRecent(item)}
-                                            activeOpacity={0.8}
-                                        >
-                                            <View style={styles.recentInfo}>
-                                                <Text style={styles.recentName} numberOfLines={1}>
-                                                    {item.name}
-                                                </Text>
-                                                <Text style={styles.recentMacros}>
-                                                    {item.calories}cal · {item.sugar}g sugar
-                                                </Text>
-                                            </View>
-                                            <Text style={styles.recentAddIcon}>+</Text>
-                                        </TouchableOpacity>
+                                        <View key={item.id} style={styles.recentItemWithPin}>
+                                            <TouchableOpacity
+                                                style={styles.recentItemMain}
+                                                onPress={() => quickAddRecent(item)}
+                                                activeOpacity={0.8}
+                                            >
+                                                <View style={styles.recentInfo}>
+                                                    <Text style={styles.recentName} numberOfLines={1}>
+                                                        {item.name}
+                                                    </Text>
+                                                    <Text style={styles.recentMacros}>
+                                                        {item.calories}cal · {item.sugar}g sugar
+                                                    </Text>
+                                                </View>
+                                                <Text style={styles.recentAddIcon}>+</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={styles.pinButton}
+                                                onPress={async () => {
+                                                    await pinItem(item);
+                                                    loadRecentFoods();
+                                                }}
+                                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                            >
+                                                <Text style={styles.pinIcon}>📍</Text>
+                                            </TouchableOpacity>
+                                        </View>
                                     ))}
                                 </View>
                             </View>
@@ -396,7 +458,7 @@ export default function FoodScannerModal({
             case 'text-input':
                 return (
                     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                        <KeyboardAvoidingView 
+                        <KeyboardAvoidingView
                             style={styles.textInputContainer}
                             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                         >
@@ -427,19 +489,19 @@ export default function FoodScannerModal({
                             {/* Examples */}
                             <View style={styles.examplesContainer}>
                                 <Text style={styles.examplesTitle}>Examples:</Text>
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     style={styles.exampleChip}
                                     onPress={() => setTextOnlyInput('Large bowl of oatmeal with banana and honey')}
                                 >
                                     <Text style={styles.exampleText}>🥣 Oatmeal with banana</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     style={styles.exampleChip}
                                     onPress={() => setTextOnlyInput('Grilled chicken sandwich with lettuce and tomato')}
                                 >
                                     <Text style={styles.exampleText}>🥪 Chicken sandwich</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     style={styles.exampleChip}
                                     onPress={() => setTextOnlyInput('Slice of pepperoni pizza')}
                                 >
@@ -449,17 +511,17 @@ export default function FoodScannerModal({
 
                             {/* Buttons */}
                             <View style={styles.buttonRow}>
-                                <TouchableOpacity 
-                                    style={styles.skipButton} 
+                                <TouchableOpacity
+                                    style={styles.skipButton}
                                     onPress={() => { setTextOnlyInput(''); setStep('select'); }}
                                 >
                                     <Text style={styles.skipText}>Back</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     style={[
                                         styles.continueButton,
                                         !textOnlyInput.trim() && styles.continueButtonDisabled
-                                    ]} 
+                                    ]}
                                     onPress={processTextOnly}
                                     disabled={!textOnlyInput.trim()}
                                 >
@@ -625,7 +687,7 @@ export default function FoodScannerModal({
                                 <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
                                     <Feather name="x" size={20} color={looviColors.text.secondary} />
                                 </TouchableOpacity>
-                                
+
                                 {renderContent()}
                             </View>
                         </TouchableWithoutFeedback>
@@ -1157,5 +1219,42 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: looviColors.coralOrange,
         paddingHorizontal: spacing.sm,
+    },
+    // Pinned foods styles
+    sectionHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: spacing.sm,
+    },
+    pinnedTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: looviColors.coralOrange,
+    },
+    recentItemWithPin: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.03)',
+        borderRadius: borderRadius.md,
+        marginBottom: spacing.xs,
+    },
+    recentItemMain: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: spacing.sm,
+        paddingLeft: spacing.md,
+    },
+    pinButton: {
+        padding: spacing.sm,
+        paddingRight: spacing.md,
+    },
+    pinIcon: {
+        fontSize: 16,
+        opacity: 0.4,
+    },
+    pinIconActive: {
+        fontSize: 16,
     },
 });

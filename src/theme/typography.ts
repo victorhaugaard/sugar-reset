@@ -7,30 +7,24 @@
 
 import { Platform, TextStyle } from 'react-native';
 
-const fontFamily = Platform.select({
-    ios: {
-        regular: 'System',
-        medium: 'System',
-        semibold: 'System',
-        bold: 'System',
+// Font Families (referencing the names from App.tsx/expo-google-fonts)
+const fonts = {
+    heading: {
+        regular: 'DMSans_400Regular',
+        medium: 'DMSans_500Medium',
+        semibold: 'DMSans_600SemiBold',
+        bold: 'DMSans_700Bold',
     },
-    android: {
-        regular: 'Roboto',
-        medium: 'Roboto',
-        semibold: 'Roboto',
-        bold: 'Roboto',
+    body: {
+        regular: 'Inter_400Regular',
+        medium: 'Inter_500Medium',
+        semibold: 'Inter_600SemiBold',
     },
-    default: {
-        regular: 'System',
-        medium: 'System',
-        semibold: 'System',
-        bold: 'System',
-    },
-});
+};
 
 export const typography = {
-    // Font families
-    fonts: fontFamily,
+    // Expose raw font map if needed
+    fonts,
 
     // Font sizes (rem-like scaling)
     sizes: {
@@ -44,14 +38,6 @@ export const typography = {
         '3xl': 34,
         '4xl': 42,
         '5xl': 56,
-    },
-
-    // Font weights - use numeric values for compatibility
-    weights: {
-        regular: '400' as const,
-        medium: '500' as const,
-        semibold: '600' as const,
-        bold: '700' as const,
     },
 
     // Line heights (in pixels)
@@ -71,86 +57,85 @@ export const typography = {
     },
 
     // Pre-defined text styles
-    // Note: textTransform removed from style objects - apply separately if needed
     styles: {
-        // Display - for large hero numbers/stats
+        // Display - Large/Hero
         display: {
+            fontFamily: fonts.heading.bold,
             fontSize: 56,
-            fontWeight: '700' as const,
             letterSpacing: -1,
             lineHeight: 62,
         } as TextStyle,
 
-        // Headings
+        // Headings - Outfit
         h1: {
+            fontFamily: fonts.heading.bold,
             fontSize: 34,
-            fontWeight: '700' as const,
             letterSpacing: -0.5,
             lineHeight: 41,
         } as TextStyle,
         h2: {
+            fontFamily: fonts.heading.semibold,
             fontSize: 28,
-            fontWeight: '600' as const,
             letterSpacing: -0.3,
             lineHeight: 34,
         } as TextStyle,
         h3: {
+            fontFamily: fonts.heading.semibold,
             fontSize: 24,
-            fontWeight: '600' as const,
             letterSpacing: 0,
             lineHeight: 30,
         } as TextStyle,
         h4: {
+            fontFamily: fonts.heading.semibold,
             fontSize: 20,
-            fontWeight: '600' as const,
             letterSpacing: 0,
             lineHeight: 26,
         } as TextStyle,
 
-        // Body
+        // Body - Inter
         body: {
+            fontFamily: fonts.body.regular,
             fontSize: 15,
-            fontWeight: '400' as const,
             letterSpacing: 0,
             lineHeight: 22,
         } as TextStyle,
         bodyMedium: {
+            fontFamily: fonts.body.medium,
             fontSize: 15,
-            fontWeight: '500' as const,
             letterSpacing: 0,
             lineHeight: 22,
         } as TextStyle,
         bodySm: {
+            fontFamily: fonts.body.regular,
             fontSize: 13,
-            fontWeight: '400' as const,
             letterSpacing: 0,
             lineHeight: 18,
         } as TextStyle,
 
-        // Labels & captions - textTransform should be applied separately
+        // Labels & Captions - Inter
         label: {
+            fontFamily: fonts.body.medium,
             fontSize: 13,
-            fontWeight: '500' as const,
             letterSpacing: 0.5,
             lineHeight: 17,
         } as TextStyle,
         caption: {
+            fontFamily: fonts.body.regular,
             fontSize: 11,
-            fontWeight: '400' as const,
             letterSpacing: 0.3,
             lineHeight: 15,
         } as TextStyle,
 
-        // Metrics & data - textTransform should be applied separately
+        // Metrics - Outfit
         metric: {
+            fontFamily: fonts.heading.semibold,
             fontSize: 42,
-            fontWeight: '600' as const,
             letterSpacing: -0.5,
             lineHeight: 48,
         } as TextStyle,
         metricLabel: {
+            fontFamily: fonts.body.medium,
             fontSize: 11,
-            fontWeight: '500' as const,
             letterSpacing: 1,
             lineHeight: 14,
         } as TextStyle,

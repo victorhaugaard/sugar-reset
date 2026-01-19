@@ -104,6 +104,13 @@ export type RootStackParamList = {
     BreathingExercise: undefined; // Guided breathing exercise
     Journal: undefined; // Journal entries screen
     Profile: undefined; // User profile screen
+    PrivacyPolicy: undefined;
+    TermsOfService: undefined;
+    Help: undefined;
+    DistractMe: undefined;
+    Alternatives: undefined;
+    InnerCircle: undefined;
+    EmergencyCall: undefined;
 };
 
 export type AuthStackParamList = {
@@ -143,8 +150,8 @@ export type OnboardingStackParamList = {
     BaselineSetup: undefined;
     SugarSpending: { dailySugarGrams?: number };
     SavingsGoal: { dailySpendingCents?: number; dailySugarGrams?: number };
-    Nickname: undefined;
-    Launch: undefined;
+    DistractMe: undefined;
+    Alternatives: undefined;
 };
 
 export type MainTabParamList = {

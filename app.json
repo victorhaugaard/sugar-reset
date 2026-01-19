@@ -13,6 +13,7 @@
       "backgroundColor": "#0D0F12"
     },
     "ios": {
+      "icon": "./src/public/appstore.png",
       "supportsTablet": true,
       "bundleIdentifier": "com.sugarreset.app",
       "infoPlist": {
@@ -42,6 +43,9 @@
         "projectId": "830fe8e5-e8bb-4d50-8695-7e2a736e75dd"
       }
     },
-    "owner": "victorhaugaard"
+    "owner": "victorhaugaard",
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

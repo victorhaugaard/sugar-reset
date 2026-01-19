@@ -58,6 +58,9 @@ import InnerCircleScreen from '../screens/InnerCircleScreen';
 import EmergencyCallScreen from '../screens/EmergencyCallScreen';
 import DistractMeScreen from '../screens/DistractMeScreen';
 import AlternativesScreen from '../screens/AlternativesScreen';
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
+import TermsOfServiceScreen from '../screens/TermsOfServiceScreen';
+import HelpScreen from '../screens/HelpScreen';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const OnboardingStack = createNativeStackNavigator<OnboardingStackParamList>();
@@ -330,6 +333,33 @@ export default function RootNavigator() {
                         headerTitle: '',
                         headerTransparent: true,
                         headerTintColor: colors.text.primary,
+                    }}
+                />
+                <RootStack.Screen
+                    name="PrivacyPolicy"
+                    component={PrivacyPolicyScreen}
+                    options={{
+                        presentation: 'card',
+                        animation: 'slide_from_right',
+                        headerShown: false,
+                    }}
+                />
+                <RootStack.Screen
+                    name="TermsOfService"
+                    component={TermsOfServiceScreen}
+                    options={{
+                        presentation: 'card',
+                        animation: 'slide_from_right',
+                        headerShown: false,
+                    }}
+                />
+                <RootStack.Screen
+                    name="Help"
+                    component={HelpScreen}
+                    options={{
+                        presentation: 'card',
+                        animation: 'slide_from_right',
+                        headerShown: false,
                     }}
                 />
             </RootStack.Navigator>

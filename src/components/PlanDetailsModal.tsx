@@ -1,10 +1,5 @@
-/**
- * PlanDetailsModal
- * 
- * Comprehensive plan guide with science-backed habits and practical tips
- */
-
 import React from 'react';
+// Re-saving to clear cache
 import {
     View,
     Text,
@@ -24,6 +19,7 @@ interface PlanDetailsModalProps {
     visible: boolean;
     planType: PlanType;
     onClose: () => void;
+    onSwitchPlan?: () => void;
 }
 
 interface HabitPrinciple {
@@ -141,7 +137,7 @@ const HELPFUL_RESOURCES = [
     },
 ];
 
-export default function PlanDetailsModal({ visible, planType, onClose }: PlanDetailsModalProps) {
+export default function PlanDetailsModal({ visible, planType, onClose, onSwitchPlan }: PlanDetailsModalProps) {
     const planTitle = planType === 'cold_turkey' ? 'Cold Turkey Plan' : 'Gradual Reduction Plan';
     const planEmoji = planType === 'cold_turkey' ? '🚀' : '🌱';
 
@@ -270,15 +266,29 @@ export default function PlanDetailsModal({ visible, planType, onClose }: PlanDet
                         )}
                     </ScrollView>
 
-                    {/* Close Button */}
+                    {/* Footer Actions - Updated with Switch Plan */}
                     <View style={styles.bottomContainer}>
-                        <TouchableOpacity
-                            style={styles.closeButton}
-                            onPress={onClose}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={styles.closeButtonText}>Got it!</Text>
-                        </TouchableOpacity>
+                        <View style={styles.footerButtons}>
+                            {onSwitchPlan && (
+                                <TouchableOpacity
+                                    style={styles.switchButton}
+                                    onPress={() => {
+                                        onClose();
+                                        setTimeout(onSwitchPlan, 300);
+                                    }}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text style={styles.switchButtonText}>Switch Plan</Text>
+                                </TouchableOpacity>
+                            )}
+                            <TouchableOpacity
+                                style={styles.closeButton}
+                                onPress={onClose}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={styles.closeButtonText}>Got it!</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </SafeAreaView>
             </View>
@@ -421,7 +431,26 @@ const styles = StyleSheet.create({
         borderTopWidth: 1,
         borderTopColor: 'rgba(0, 0, 0, 0.1)',
     },
+    footerButtons: {
+        flexDirection: 'row',
+        gap: spacing.md,
+    },
+    switchButton: {
+        flex: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.5)',
+        paddingVertical: spacing.md,
+        borderRadius: borderRadius.lg,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(0, 0, 0, 0.05)',
+    },
+    switchButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: skyColors.text.primary,
+    },
     closeButton: {
+        flex: 2,
         backgroundColor: skyColors.accent.primary,
         paddingVertical: spacing.md,
         borderRadius: borderRadius.lg,

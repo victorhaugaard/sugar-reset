@@ -13,7 +13,34 @@ import { UserDataProvider } from './src/context/UserDataContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { colors } from './src/theme';
 
+import {
+  useFonts,
+  DMSans_400Regular,
+  DMSans_500Medium,
+  DMSans_600SemiBold,
+  DMSans_700Bold,
+} from '@expo-google-fonts/dm-sans';
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+} from '@expo-google-fonts/inter';
+
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_600SemiBold,
+    DMSans_700Bold,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+  });
+
+  if (!fontsLoaded) {
+    return null; // Keep splash screen visible or show loading
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background.primary }}>
       <SafeAreaProvider>

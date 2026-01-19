@@ -32,7 +32,7 @@ import * as Haptics from 'expo-haptics';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
-import { spacing, borderRadius } from '../theme';
+import { spacing, borderRadius, typography } from '../theme';
 import LooviBackground, { looviColors } from '../components/LooviBackground';
 import { GlassCard } from '../components/GlassCard';
 import { useUserData } from '../context/UserDataContext';
@@ -541,7 +541,7 @@ export default function HomeScreen() {
                                 renderItem={({ item, index }) => {
                                     const isPledged = hasPledgedToday;
                                     const isLogged = hasFoodLoggedToday;
-                                    const isJournaled = !!wellnessAverages;
+                                    const isJournaled = hasWellnessToday;
 
                                     let isCompleted = false;
                                     let label = "";
@@ -577,10 +577,10 @@ export default function HomeScreen() {
                                         subLabel = isJournaled ? "Completed" : "Evening";
                                         iconEmoji = isJournaled ? "✅" : "📓";
                                         // When done: Green background
-                                        bg = isJournaled ? looviColors.accent.success : 'rgba(127, 176, 105, 0.9)';
+                                        bg = isJournaled ? looviColors.accent.success : 'rgba(235, 110, 95, 0.9)'; // Orange/Red for Evening/Incomplete
                                         shadow = '#7FB069';
-                                        onPress = () => isLogged && setShowWellnessModal(true);
-                                        disabled = !isLogged;
+                                        onPress = () => setShowWellnessModal(true);
+                                        // Allow journaling anytime
                                     }
 
                                     // Animations
@@ -1300,8 +1300,8 @@ const styles = StyleSheet.create({
         marginTop: -spacing.xs,
     },
     timerText: {
+        fontFamily: typography.fonts.heading.bold,
         fontSize: 18,
-        fontWeight: '700',
         color: looviColors.accent.primary,
         letterSpacing: 0.5,
         textShadowColor: 'rgba(217, 123, 102, 0.3)',
@@ -1326,8 +1326,8 @@ const styles = StyleSheet.create({
         marginBottom: 0,
     },
     streakText: {
+        fontFamily: typography.fonts.body.semibold,
         fontSize: 12,
-        fontWeight: '600',
         color: '#D97706',
     },
     streakRow: {
@@ -1549,8 +1549,8 @@ const styles = StyleSheet.create({
         marginBottom: spacing.xl,
     },
     reasonsSectionTitle: {
+        fontFamily: typography.fonts.heading.semibold,
         fontSize: 18,
-        fontWeight: '600',
         color: looviColors.text.primary,
         marginBottom: spacing.md,
     },
@@ -1577,8 +1577,8 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
     },
     reasonText: {
+        fontFamily: typography.fonts.body.medium,
         fontSize: 14,
-        fontWeight: '500',
         color: looviColors.text.secondary,
         flex: 1,
     },
@@ -2418,15 +2418,15 @@ const styles = StyleSheet.create({
         elevation: 10,
     },
     largeCircleButtonLabel: {
+        fontFamily: typography.fonts.heading.bold,
         fontSize: 14,
-        fontWeight: '700',
         color: looviColors.text.primary,
         textAlign: 'center',
         marginTop: spacing.xs,
     },
     largeFlowTimeLabel: {
+        fontFamily: typography.fonts.body.medium,
         fontSize: 11,
-        fontWeight: '500',
         color: looviColors.text.tertiary,
         textAlign: 'center',
         marginTop: 2,

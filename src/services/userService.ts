@@ -7,6 +7,8 @@
 import {
     doc,
     getDoc,
+    getDocFromServer,
+    getDocFromCache,
     setDoc,
     updateDoc,
     serverTimestamp,
@@ -55,12 +57,28 @@ export const userService = {
             console.log('📴 Firebase not ready, skipping getUserProfile');
             return null;
         }
-        
+
         try {
             console.log(`📖 Fetching user profile for: ${userId} (attempt ${retryCount + 1})`);
             const docRef = doc(db, 'users', userId);
-            const docSnap = await getDoc(docRef);
-            console.log('✅ User profile fetch completed, exists:', docSnap.exists());
+
+            // Try to get from server first (bypasses flaky offline detection)
+            let docSnap;
+            try {
+                docSnap = await getDocFromServer(docRef);
+                console.log('✅ User profile fetch completed from SERVER, exists:', docSnap.exists());
+            } catch (serverError: any) {
+                // If server fails, try cache
+                console.log('⚠️ Server fetch failed for user profile, trying cache...', serverError?.code);
+                try {
+                    docSnap = await getDocFromCache(docRef);
+                    console.log('✅ User profile fetch completed from CACHE, exists:', docSnap.exists());
+                } catch (cacheError: any) {
+                    // Neither worked, throw the server error
+                    console.log('❌ Cache also failed for user profile:', cacheError?.code);
+                    throw serverError;
+                }
+            }
 
             if (!docSnap.exists()) {
                 return null;
@@ -101,7 +119,7 @@ export const userService = {
         displayName?: string
     ): Promise<User | null> {
         if (!isFirebaseReady()) return null;
-        
+
         try {
             const now = new Date();
             const defaultPreferences: UserPreferences = {

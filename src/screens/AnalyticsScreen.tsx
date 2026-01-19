@@ -25,7 +25,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, Feather } from '@expo/vector-icons';
-import { spacing, borderRadius } from '../theme';
+import { spacing, borderRadius, typography } from '../theme';
 import LooviBackground, { looviColors } from '../components/LooviBackground';
 import { GlassCard } from '../components/GlassCard';
 import { useUserData } from '../context/UserDataContext';
@@ -143,14 +143,14 @@ const generateInsights = (
     }
 
     // Calculate averages
-    const avgMood = wellnessLogs.length > 0 
-        ? wellnessLogs.reduce((sum, log) => sum + log.mood, 0) / wellnessLogs.length 
+    const avgMood = wellnessLogs.length > 0
+        ? wellnessLogs.reduce((sum, log) => sum + log.mood, 0) / wellnessLogs.length
         : 0;
-    const avgEnergy = wellnessLogs.length > 0 
-        ? wellnessLogs.reduce((sum, log) => sum + log.energy, 0) / wellnessLogs.length 
+    const avgEnergy = wellnessLogs.length > 0
+        ? wellnessLogs.reduce((sum, log) => sum + log.energy, 0) / wellnessLogs.length
         : 0;
-    const avgSleep = wellnessLogs.length > 0 
-        ? wellnessLogs.reduce((sum, log) => sum + log.sleepHours, 0) / wellnessLogs.length 
+    const avgSleep = wellnessLogs.length > 0
+        ? wellnessLogs.reduce((sum, log) => sum + log.sleepHours, 0) / wellnessLogs.length
         : 0;
 
     // Energy insight
@@ -351,7 +351,7 @@ export default function AnalyticsScreen() {
     useEffect(() => {
         const calculateScore = () => {
             const days = getTimeframeDays(timeframe);
-            
+
             const wellnessMetrics: WellnessMetrics[] = filteredWellnessLogs.map(log => ({
                 mood: log.mood,
                 energy: log.energy,
@@ -409,7 +409,7 @@ export default function AnalyticsScreen() {
     };
 
     // Generate personalized insights
-    const insights = useMemo(() => 
+    const insights = useMemo(() =>
         generateInsights(filteredWellnessLogs, filteredScannedItems, nutritionInsights),
         [filteredWellnessLogs, filteredScannedItems, nutritionInsights]
     );
@@ -639,7 +639,7 @@ export default function AnalyticsScreen() {
                         <View style={styles.insightsSection}>
                             <Text style={styles.insightsSectionTitle}>Your Insights</Text>
                             <Text style={styles.insightsSectionSubtitle}>Personalized recommendations based on your data</Text>
-                            
+
                             {insights.map((insight, index) => (
                                 <TouchableOpacity
                                     key={index}
@@ -676,7 +676,7 @@ export default function AnalyticsScreen() {
                                 <Ionicons name="scan" size={22} color="#FFFFFF" />
                                 <Text style={styles.quickActionPrimaryText}>Log Food</Text>
                             </TouchableOpacity>
-                            
+
                             <TouchableOpacity
                                 style={[styles.quickActionButton, styles.quickActionSecondary]}
                                 onPress={() => setShowWellnessModal(true)}
@@ -691,7 +691,7 @@ export default function AnalyticsScreen() {
                         {nutritionInsights && nutritionInsights.avgCalories > 0 && (
                             <GlassCard variant="light" padding="lg" style={styles.nutritionSummaryCard}>
                                 <Text style={styles.nutritionSummaryTitle}>Nutrition Summary</Text>
-                                
+
                                 <View style={styles.nutritionStatsRow}>
                                     <View style={styles.nutritionStat}>
                                         <Text style={styles.nutritionStatValue}>{nutritionInsights.avgCalories}</Text>
@@ -723,14 +723,14 @@ export default function AnalyticsScreen() {
                                         </Text>
                                     </View>
                                     <View style={styles.sugarMeterTrack}>
-                                        <View 
+                                        <View
                                             style={[
                                                 styles.sugarMeterFill,
-                                                { 
+                                                {
                                                     width: `${Math.min((nutritionInsights.avgAddedSugar / 50) * 100, 100)}%`,
                                                     backgroundColor: nutritionInsights.avgAddedSugar <= 25 ? '#22C55E' : nutritionInsights.avgAddedSugar <= 50 ? '#F59E0B' : '#EF4444'
                                                 }
-                                            ]} 
+                                            ]}
                                         />
                                         <View style={styles.sugarMeterMarker} />
                                     </View>
@@ -748,7 +748,7 @@ export default function AnalyticsScreen() {
                             <GlassCard variant="light" padding="lg" style={styles.wellnessSummaryCard}>
                                 <Text style={styles.wellnessSummaryTitle}>Wellness Summary</Text>
                                 <Text style={styles.wellnessSummarySubtitle}>Based on {filteredWellnessLogs.length} check-ins</Text>
-                                
+
                                 <View style={styles.wellnessMetricsGrid}>
                                     {[
                                         { label: 'Mood', value: wellnessAverages.mood, icon: 'happy-outline', color: looviColors.coralOrange },
@@ -813,8 +813,8 @@ const styles = StyleSheet.create({
         marginBottom: spacing.xl,
     },
     title: {
+        fontFamily: typography.fonts.heading.bold,
         fontSize: 28,
-        fontWeight: '700',
         color: looviColors.text.primary,
         letterSpacing: -0.5,
     },
@@ -864,8 +864,8 @@ const styles = StyleSheet.create({
         color: looviColors.text.tertiary,
     },
     scoreItemValue: {
+        fontFamily: typography.fonts.heading.bold,
         fontSize: 28,
-        fontWeight: '700',
     },
     scoreItemOutOf: {
         fontSize: 12,
@@ -892,8 +892,8 @@ const styles = StyleSheet.create({
         marginBottom: spacing.lg,
     },
     insightsSectionTitle: {
+        fontFamily: typography.fonts.heading.bold,
         fontSize: 20,
-        fontWeight: '700',
         color: looviColors.text.primary,
         marginBottom: spacing.xs,
     },
@@ -986,8 +986,8 @@ const styles = StyleSheet.create({
         marginBottom: spacing.lg,
     },
     nutritionSummaryTitle: {
+        fontFamily: typography.fonts.heading.bold,
         fontSize: 18,
-        fontWeight: '700',
         color: looviColors.text.primary,
         marginBottom: spacing.md,
     },
@@ -1067,8 +1067,8 @@ const styles = StyleSheet.create({
         marginBottom: spacing.lg,
     },
     wellnessSummaryTitle: {
+        fontFamily: typography.fonts.heading.bold,
         fontSize: 18,
-        fontWeight: '700',
         color: looviColors.text.primary,
     },
     wellnessSummarySubtitle: {

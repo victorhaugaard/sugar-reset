@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { calculateFoodHealthScore } from './healthScoringService';
 
 const SCANNED_ITEMS_KEY = '@sugar_reset_scanned_items';
+const PINNED_ITEMS_KEY = '@sugar_reset_pinned_items';
 
 export interface ScannedItem {
     id: string;
@@ -32,6 +33,7 @@ export interface ScannedItem {
     // Optional
     suggestion?: string;
     confidence: number;
+    pinned?: boolean;  // Whether this item is pinned for quick access
 }
 
 export interface AnalysisResult {
@@ -128,6 +130,63 @@ export const clearScannedItems = async (): Promise<void> => {
         console.error('Error clearing scanned items:', error);
         throw error;
     }
+};
+
+/**
+ * Get all pinned items
+ */
+export const getPinnedItems = async (): Promise<ScannedItem[]> => {
+    try {
+        const stored = await AsyncStorage.getItem(PINNED_ITEMS_KEY);
+        if (stored) {
+            return JSON.parse(stored);
+        }
+        return [];
+    } catch (error) {
+        console.error('Error loading pinned items:', error);
+        return [];
+    }
+};
+
+/**
+ * Pin an item (add to favorites for quick access)
+ */
+export const pinItem = async (item: ScannedItem): Promise<void> => {
+    try {
+        const existing = await getPinnedItems();
+        // Check if already pinned (by name to avoid duplicates)
+        const alreadyPinned = existing.some(p => p.name === item.name);
+        if (alreadyPinned) return;
+
+        const pinnedItem = { ...item, pinned: true };
+        const updated = [pinnedItem, ...existing].slice(0, 20); // Keep max 20 pinned items
+        await AsyncStorage.setItem(PINNED_ITEMS_KEY, JSON.stringify(updated));
+    } catch (error) {
+        console.error('Error pinning item:', error);
+        throw error;
+    }
+};
+
+/**
+ * Unpin an item (remove from favorites)
+ */
+export const unpinItem = async (itemName: string): Promise<void> => {
+    try {
+        const existing = await getPinnedItems();
+        const updated = existing.filter(item => item.name !== itemName);
+        await AsyncStorage.setItem(PINNED_ITEMS_KEY, JSON.stringify(updated));
+    } catch (error) {
+        console.error('Error unpinning item:', error);
+        throw error;
+    }
+};
+
+/**
+ * Check if an item is pinned (by name)
+ */
+export const isItemPinned = async (itemName: string): Promise<boolean> => {
+    const pinned = await getPinnedItems();
+    return pinned.some(item => item.name === itemName);
 };
 
 /**

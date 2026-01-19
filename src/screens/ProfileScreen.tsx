@@ -16,7 +16,9 @@ import {
     Dimensions,
     Modal,
     TextInput,
+    Linking,
 } from 'react-native';
+import * as StoreReview from 'expo-store-review';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { spacing, borderRadius } from '../theme';
@@ -45,8 +47,6 @@ const menuSections = [
         title: 'Account',
         items: [
             { id: 'profile', emoji: '👤', label: 'Edit Profile' },
-            { id: 'goals', emoji: '🎯', label: 'My Goals' },
-            { id: 'journal', emoji: '📝', label: 'Journal' },
             { id: 'plan', emoji: '📋', label: 'My Plan' },
         ],
     },
@@ -88,61 +88,18 @@ export default function ProfileScreen() {
     const { signOut } = useAuth();
     const navigation = useNavigation<any>();
     const [showPlanDetails, setShowPlanDetails] = useState(false);
-    const [showEditGoals, setShowEditGoals] = useState(false);
     const [showEditProfile, setShowEditProfile] = useState(false);
-    const [showEditSavingsModal, setShowEditSavingsModal] = useState(false);
-    const [editSavingsGoal, setEditSavingsGoal] = useState('');
     const [editNameState, setEditNameState] = useState('');
     const [editUsername, setEditUsername] = useState('');
     const [originalUsername, setOriginalUsername] = useState('');
     const [usernameError, setUsernameError] = useState('');
     const [isSavingProfile, setIsSavingProfile] = useState(false);
-    const [timeElapsed, setTimeElapsed] = useState(0);
-    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Get user data from context
 
     // Get user data from context
     const startDateString = onboardingData.startDate || new Date().toISOString();
     const startDate = useMemo(() => new Date(startDateString), [startDateString]);
-    const dailySpendingCents = onboardingData.dailySpendingCents || 300;
-    const savingsGoal = onboardingData.savingsGoal || 'Something amazing';
-    const savingsGoalAmount = onboardingData.savingsGoalAmount || 500;
-
-    const GOAL_TO_REASON: Record<string, string> = {
-        cravings: 'Break free from sugar cravings',
-        habits: 'Form healthier daily habits',
-        energy: 'Better focus and mental clarity',
-        health: 'Improved overall health',
-        weight: 'Achieve your weight goals',
-        skin: 'Clearer, healthier skin',
-        focus: 'Enhanced focus and productivity',
-        blood_sugar: 'Stable blood sugar levels',
-        sleep: 'Improved sleep quality',
-        savings: 'Save money for what matters',
-    };
-
-    const userGoals = onboardingData.goals || [];
-    const reasons = userGoals.length > 0
-        ? userGoals.map(goalOrText => GOAL_TO_REASON[goalOrText] || goalOrText).filter(Boolean)
-        : ['Better focus and mental clarity', 'Stable blood sugar levels', 'Improved sleep quality'];
-
-    useEffect(() => {
-        const now = new Date();
-        const elapsed = now.getTime() - startDate.getTime();
-        setTimeElapsed(Math.max(0, elapsed));
-
-        intervalRef.current = setInterval(() => {
-            const now = new Date();
-            const elapsed = now.getTime() - startDate.getTime();
-            setTimeElapsed(Math.max(0, elapsed));
-        }, 1000);
-
-        return () => {
-            if (intervalRef.current) clearInterval(intervalRef.current);
-        };
-    }, [startDate]);
-
-    const moneySavedCents = Math.floor((timeElapsed / (1000 * 60 * 60 * 24)) * dailySpendingCents);
-    const moneySavedValue = (moneySavedCents / 100).toFixed(2);
 
     // Get user data from context
     const name = onboardingData.nickname || user?.displayName || 'Guest';
@@ -198,18 +155,10 @@ export default function ProfileScreen() {
         );
     };
 
-    const handleEditGoals = () => {
-        setShowEditGoals(true);
-    };
 
-    const handleSaveGoals = async (newGoals: string[]) => {
-        await updateOnboardingData({ goals: newGoals });
-    };
 
-    const handleEditSavings = () => {
-        setEditSavingsGoal(savingsGoal);
-        setShowEditSavingsModal(true);
-    };
+
+
 
     const handleClearAllData = () => {
         Alert.alert(
@@ -233,13 +182,6 @@ export default function ProfileScreen() {
                 },
             ]
         );
-    };
-
-    const handleSaveSavingsGoal = async () => {
-        if (editSavingsGoal.trim()) {
-            await updateOnboardingData({ savingsGoal: editSavingsGoal.trim() });
-            setShowEditSavingsModal(false);
-        }
     };
 
     const handleEditProfile = async () => {
@@ -339,38 +281,7 @@ export default function ProfileScreen() {
                         </GlassCard>
 
                         {/* Reasons Section */}
-                        <View style={styles.profileSection}>
-                            <View style={styles.profileSectionHeader}>
-                                <Text style={styles.profileSectionTitle}>Why I Started</Text>
-                                <TouchableOpacity onPress={handleEditGoals}>
-                                    <Text style={styles.editIcon}>✏️</Text>
-                                </TouchableOpacity>
-                            </View>
-                            <View style={styles.reasonsContainer}>
-                                {reasons.map((reason, index) => (
-                                    <GlassCard key={index} variant="light" padding="md" style={styles.reasonCard}>
-                                        <Text style={styles.reasonText}>{reason}</Text>
-                                    </GlassCard>
-                                ))}
-                            </View>
-                        </View>
 
-                        {/* Savings Section */}
-                        <TouchableOpacity activeOpacity={0.8} onPress={handleEditSavings} style={styles.profileSection}>
-                            <GlassCard variant="light" padding="md" style={styles.savingsCard}>
-                                <View style={styles.savingsHeader}>
-                                    <Text style={styles.savingsLabel}>Saving for</Text>
-                                    <Text style={styles.editIcon}>✏️</Text>
-                                </View>
-                                <Text style={styles.savingsGoalTitle}>{savingsGoal}</Text>
-                                <View style={styles.savingsProgress}>
-                                    <View style={styles.savingsProgressBar}>
-                                        <View style={[styles.savingsProgressFill, { width: `${Math.min((moneySavedCents / (savingsGoalAmount * 100)) * 100, 100)}%` }]} />
-                                    </View>
-                                    <Text style={styles.savingsProgressText}>${moneySavedValue} / ${savingsGoalAmount} goal</Text>
-                                </View>
-                            </GlassCard>
-                        </TouchableOpacity>
 
                         {/* Menu Sections */}
                         {menuSections.map((section, sectionIndex) => (
@@ -388,45 +299,59 @@ export default function ProfileScreen() {
                                             onPress={
                                                 item.id === 'plan'
                                                     ? handleViewPlanDetails
-                                                    : item.id === 'goals'
-                                                        ? handleEditGoals
-                                                        : item.id === 'profile'
-                                                            ? handleEditProfile
-                                                            : item.id === 'journal'
-                                                                ? () => navigation.navigate('Journal')
-                                                                : item.id === 'seed_db'
+                                                    : item.id === 'profile'
+                                                        ? handleEditProfile
+                                                        : item.id === 'journal'
+                                                            ? () => navigation.navigate('Journal')
+                                                            : item.id === 'help'
+                                                                ? () => navigation.navigate('Help')
+                                                                : item.id === 'rate'
                                                                     ? async () => {
-                                                                        if (!user) {
-                                                                            Alert.alert('Error', 'You must be logged in');
-                                                                            return;
+                                                                        if (await StoreReview.hasAction()) {
+                                                                            StoreReview.requestReview();
+                                                                        } else {
+                                                                            Alert.alert('Rate App', 'You can rate us on the App Store!');
                                                                         }
-                                                                        Alert.alert(
-                                                                            'Seed Database',
-                                                                            'This will create sample posts, users, and stats for testing. Continue?',
-                                                                            [
-                                                                                { text: 'Cancel', style: 'cancel' },
-                                                                                {
-                                                                                    text: 'Seed',
-                                                                                    onPress: async () => {
-                                                                                        const result = await seedDatabase(user.id);
+                                                                    }
+                                                                    : item.id === 'feedback'
+                                                                        ? () => Linking.openURL('mailto:hello@scriptcollective.com')
+                                                                        : item.id === 'privacy'
+                                                                            ? () => navigation.navigate('PrivacyPolicy')
+                                                                            : item.id === 'terms'
+                                                                                ? () => navigation.navigate('TermsOfService')
+                                                                                : item.id === 'seed_db'
+                                                                                    ? async () => {
+                                                                                        if (!user) {
+                                                                                            Alert.alert('Error', 'You must be logged in');
+                                                                                            return;
+                                                                                        }
                                                                                         Alert.alert(
-                                                                                            result.success ? 'Success!' : 'Error',
-                                                                                            result.success ? 'Database seeded with test data. Refresh the Social tab!' : 'Failed to seed database'
+                                                                                            'Seed Database',
+                                                                                            'This will create sample posts, users, and stats for testing. Continue?',
+                                                                                            [
+                                                                                                { text: 'Cancel', style: 'cancel' },
+                                                                                                {
+                                                                                                    text: 'Seed',
+                                                                                                    onPress: async () => {
+                                                                                                        const result = await seedDatabase(user.id);
+                                                                                                        Alert.alert(
+                                                                                                            result.success ? 'Success!' : 'Error',
+                                                                                                            result.success ? 'Database seeded with test data. Refresh the Social tab!' : 'Failed to seed database'
+                                                                                                        );
+                                                                                                    }
+                                                                                                }
+                                                                                            ]
                                                                                         );
                                                                                     }
-                                                                                }
-                                                                            ]
-                                                                        );
-                                                                    }
-                                                                    : item.id === 'test_connection'
-                                                                        ? async () => {
-                                                                            const connected = await testFirestoreConnection();
-                                                                            Alert.alert(
-                                                                                connected ? 'Connected!' : 'Connection Failed',
-                                                                                connected ? 'Firestore is working correctly' : 'Check your network and Firebase config'
-                                                                            );
-                                                                        }
-                                                                        : undefined
+                                                                                    : item.id === 'test_connection'
+                                                                                        ? async () => {
+                                                                                            const connected = await testFirestoreConnection();
+                                                                                            Alert.alert(
+                                                                                                connected ? 'Connected!' : 'Connection Failed',
+                                                                                                connected ? 'Firestore is working correctly' : 'Check your network and Firebase config'
+                                                                                            );
+                                                                                        }
+                                                                                        : undefined
                                             }
                                         >
                                             <AppIcon emoji={item.emoji} size={20} />
@@ -482,52 +407,11 @@ export default function ProfileScreen() {
                         <Text style={styles.version}>SugarReset v1.0.0</Text>
                     </ScrollView>
 
-                    {/* Edit Goals Modal */}
-                    <EditGoalsModal
-                        visible={showEditGoals}
-                        currentGoals={onboardingData.goals || []}
-                        onSave={handleSaveGoals}
-                        onClose={() => setShowEditGoals(false)}
-                    />
+
 
                     {/* Edit Savings Goal Modal */}
-                    <Modal
-                        visible={showEditSavingsModal}
-                        transparent
-                        animationType="fade"
-                        onRequestClose={() => setShowEditSavingsModal(false)}
-                    >
-                        <TouchableOpacity
-                            style={styles.modalOverlay}
-                            activeOpacity={1}
-                            onPress={() => setShowEditSavingsModal(false)}
-                        >
-                            <TouchableOpacity activeOpacity={1} style={styles.editModalContent}>
-                                <Text style={styles.editModalTitle}>What are you saving for?</Text>
-                                <TextInput
-                                    style={styles.editInput}
-                                    value={editSavingsGoal}
-                                    onChangeText={setEditSavingsGoal}
-                                    placeholder="e.g., A vacation, New phone..."
-                                    placeholderTextColor={looviColors.text.muted}
-                                />
-                                <View style={styles.editModalButtons}>
-                                    <TouchableOpacity
-                                        style={styles.editCancelButton}
-                                        onPress={() => setShowEditSavingsModal(false)}
-                                    >
-                                        <Text style={styles.editCancelText}>Cancel</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={styles.editSaveButton}
-                                        onPress={handleSaveSavingsGoal}
-                                    >
-                                        <Text style={styles.editSaveText}>Save</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </TouchableOpacity>
-                        </TouchableOpacity>
-                    </Modal>
+
+                    {/* Edit Profile Modal */}
 
                     {/* Edit Profile Modal */}
                     <Modal
@@ -587,11 +471,13 @@ export default function ProfileScreen() {
                         </TouchableOpacity>
                     </Modal>
 
+
                     {/* Plan Details Modal */}
                     <PlanDetailsModal
                         visible={showPlanDetails}
                         planType={onboardingData.plan || 'cold_turkey'}
                         onClose={() => setShowPlanDetails(false)}
+                        onSwitchPlan={handleChangePlan}
                     />
                 </SafeAreaView>
             </LooviBackground>

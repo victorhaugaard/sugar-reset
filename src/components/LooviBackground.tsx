@@ -160,7 +160,9 @@ export type BackgroundVariant =
     | 'mixed'           // Both colors mixed organically
     | 'subtle'          // Very subtle, mostly beige
     | 'coralDominant'   // Large coral presence
-    | 'blueDominant';   // Large blue presence
+    | 'blueDominant'   // Large blue presence
+    | 'blueRight'      // Blue on right side
+    | 'coralRight';    // Coral on right side
 
 interface LooviBackgroundProps {
     children?: React.ReactNode;
@@ -424,6 +426,72 @@ export default function LooviBackground({
                             locations={[0, 0.7, 1]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 1 }}
+                            style={styles.gradient}
+                        />
+                    </>
+                );
+
+
+
+            case 'blueRight':
+                return (
+                    <>
+                        {/* Blue from right side */}
+                        <LinearGradient
+                            colors={[
+                                'rgba(168, 216, 232, 0.9)',
+                                'rgba(197, 228, 240, 0.6)',
+                                'rgba(197, 228, 240, 0.3)',
+                                'transparent',
+                            ]}
+                            locations={[0, 0.25, 0.5, 1]}
+                            start={{ x: 1, y: 0.3 }}
+                            end={{ x: 0, y: 0.5 }}
+                            style={styles.gradient}
+                        />
+                        {/* Coral accent bottom-left */}
+                        <LinearGradient
+                            colors={[
+                                'transparent',
+                                'transparent',
+                                'rgba(232, 168, 124, 0.25)',
+                                'rgba(238, 196, 160, 0.4)',
+                            ]}
+                            locations={[0, 0.5, 0.75, 1]}
+                            start={{ x: 1, y: 0 }}
+                            end={{ x: 0, y: 1 }}
+                            style={styles.gradient}
+                        />
+                    </>
+                );
+
+            case 'coralRight':
+                return (
+                    <>
+                        {/* Coral from right side */}
+                        <LinearGradient
+                            colors={[
+                                'rgba(232, 168, 124, 0.9)',
+                                'rgba(238, 196, 160, 0.6)',
+                                'rgba(242, 228, 216, 0.3)',
+                                'transparent',
+                            ]}
+                            locations={[0, 0.25, 0.5, 1]}
+                            start={{ x: 1, y: 0.3 }}
+                            end={{ x: 0, y: 0.5 }}
+                            style={styles.gradient}
+                        />
+                        {/* Blue accent bottom-left */}
+                        <LinearGradient
+                            colors={[
+                                'transparent',
+                                'transparent',
+                                'rgba(168, 216, 232, 0.25)',
+                                'rgba(168, 216, 232, 0.4)',
+                            ]}
+                            locations={[0, 0.5, 0.75, 1]}
+                            start={{ x: 1, y: 0 }}
+                            end={{ x: 0, y: 1 }}
                             style={styles.gradient}
                         />
                     </>
