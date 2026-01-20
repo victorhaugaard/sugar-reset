@@ -355,6 +355,26 @@ export const communityStatsService = {
         }
         return num.toString();
     },
+
+    /**
+     * Trigger community stats update via Cloud Function
+     * Call this after syncing user stats to keep community stats up-to-date
+     */
+    async triggerStatsUpdate(): Promise<void> {
+        if (!isFirebaseReady()) {
+            return;
+        }
+
+        try {
+            const functions = getFunctions(app, 'us-central1');
+            const updateStatsFunc = httpsCallable(functions, 'updateCommunityStats');
+            await updateStatsFunc();
+            console.log('✅ Community stats update triggered');
+        } catch (error: any) {
+            // Silently fail - this is a background operation
+            console.log('⚠️ Could not trigger community stats update:', error?.message);
+        }
+    },
 };
 
 export default communityStatsService;

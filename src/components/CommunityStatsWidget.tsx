@@ -1,7 +1,8 @@
 /**
  * CommunityStatsWidget
  * 
- * Displays aggregated community statistics in an attractive card layout.
+ * Displays key community statistics in a clean, minimal horizontal layout.
+ * Redesigned for clarity and reduced visual clutter.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -14,7 +15,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { spacing, borderRadius } from '../theme';
 import { looviColors } from './LooviBackground';
-import { GlassCard } from './GlassCard';
 import { communityStatsService, CommunityStats } from '../services/communityStatsService';
 
 interface CommunityStatsWidgetProps {
@@ -46,9 +46,9 @@ export function CommunityStatsWidget({ onStatsLoaded }: CommunityStatsWidgetProp
 
     if (isLoading) {
         return (
-            <GlassCard variant="light" padding="lg" style={styles.card}>
+            <View style={styles.container}>
                 <ActivityIndicator size="small" color={looviColors.accent.primary} />
-            </GlassCard>
+            </View>
         );
     }
 
@@ -56,136 +56,84 @@ export function CommunityStatsWidget({ onStatsLoaded }: CommunityStatsWidgetProp
         return null;
     }
 
-    const formatNumber = communityStatsService.formatNumber;
-
     return (
-        <GlassCard variant="light" padding="md" style={styles.card}>
-            <View style={styles.header}>
-                <Ionicons name="globe-outline" size={20} color={looviColors.accent.primary} />
-                <Text style={styles.title}>Community Stats</Text>
-            </View>
-
-            <View style={styles.statsGrid}>
-                {/* Active Users */}
+        <View style={styles.container}>
+            {/* Simple 3-stat horizontal layout */}
+            <View style={styles.statsRow}>
                 <View style={styles.statItem}>
-                    <View style={[styles.statIcon, { backgroundColor: `${looviColors.accent.primary}15` }]}>
-                        <Ionicons name="people" size={18} color={looviColors.accent.primary} />
+                    <View style={styles.statIconWrapper}>
+                        <Ionicons name="people" size={16} color={looviColors.accent.primary} />
                     </View>
-                    <Text style={styles.statValue}>{formatNumber(stats.activeUsers)}</Text>
-                    <Text style={styles.statLabel}>Active Users</Text>
+                    <Text style={styles.statValue}>{stats.activeUsers}</Text>
+                    <Text style={styles.statLabel}>Active</Text>
                 </View>
 
-                {/* Average Streak */}
+                <View style={styles.divider} />
+
                 <View style={styles.statItem}>
-                    <View style={[styles.statIcon, { backgroundColor: `${looviColors.accent.warning}15` }]}>
-                        <Ionicons name="flame" size={18} color={looviColors.accent.warning} />
+                    <View style={styles.statIconWrapper}>
+                        <Ionicons name="flame" size={16} color={looviColors.accent.warning} />
                     </View>
                     <Text style={styles.statValue}>{stats.averageStreak}</Text>
-                    <Text style={styles.statLabel}>Avg. Streak</Text>
+                    <Text style={styles.statLabel}>Avg Streak</Text>
                 </View>
 
-                {/* Average Health Score */}
-                <View style={styles.statItem}>
-                    <View style={[styles.statIcon, { backgroundColor: `${looviColors.accent.success}15` }]}>
-                        <Ionicons name="heart" size={18} color={looviColors.accent.success} />
-                    </View>
-                    <Text style={styles.statValue}>{stats.averageHealthScore}</Text>
-                    <Text style={styles.statLabel}>Avg. Score</Text>
-                </View>
+                <View style={styles.divider} />
 
-                {/* Total Days Sugar-Free */}
                 <View style={styles.statItem}>
-                    <View style={[styles.statIcon, { backgroundColor: `${looviColors.skyBlue}30` }]}>
-                        <Ionicons name="calendar" size={18} color={looviColors.skyBlue} />
+                    <View style={styles.statIconWrapper}>
+                        <Ionicons name="trophy" size={16} color="#FFD700" />
                     </View>
-                    <Text style={styles.statValue}>{formatNumber(stats.totalDaysSugarFree)}</Text>
-                    <Text style={styles.statLabel}>Days SF</Text>
+                    <Text style={styles.statValue}>{stats.topStreak}</Text>
+                    <Text style={styles.statLabel}>Top Streak</Text>
                 </View>
             </View>
-
-            {/* Top Stats Row */}
-            <View style={styles.topStatsRow}>
-                <View style={styles.topStat}>
-                    <Text style={styles.topStatLabel}>🏆 Top Streak</Text>
-                    <Text style={styles.topStatValue}>{stats.topStreak} days</Text>
-                </View>
-                <View style={styles.topStatDivider} />
-                <View style={styles.topStat}>
-                    <Text style={styles.topStatLabel}>⭐ Top Score</Text>
-                    <Text style={styles.topStatValue}>{stats.topHealthScore}</Text>
-                </View>
-            </View>
-        </GlassCard>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    card: {
+    container: {
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        borderRadius: borderRadius.xl,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.lg,
         marginBottom: spacing.lg,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
     },
-    header: {
+    statsRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.sm,
-        marginBottom: spacing.md,
-    },
-    title: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-    },
-    statsGrid: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: spacing.md,
+        justifyContent: 'space-around',
     },
     statItem: {
         alignItems: 'center',
         flex: 1,
     },
-    statIcon: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        alignItems: 'center',
-        justifyContent: 'center',
+    statIconWrapper: {
         marginBottom: spacing.xs,
     },
     statValue: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: '700',
         color: looviColors.text.primary,
+        letterSpacing: -0.5,
     },
     statLabel: {
         fontSize: 11,
         color: looviColors.text.tertiary,
         marginTop: 2,
+        textTransform: 'uppercase',
+        letterSpacing: 0.3,
     },
-    topStatsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingTop: spacing.md,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(0, 0, 0, 0.05)',
-    },
-    topStat: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    topStatDivider: {
+    divider: {
         width: 1,
-        height: 30,
-        backgroundColor: 'rgba(0, 0, 0, 0.08)',
-    },
-    topStatLabel: {
-        fontSize: 12,
-        color: looviColors.text.tertiary,
-        marginBottom: 4,
-    },
-    topStatValue: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: looviColors.accent.primary,
+        height: 40,
+        backgroundColor: 'rgba(0, 0, 0, 0.06)',
     },
 });
 

@@ -427,7 +427,25 @@ export default function TrackingScreen() {
                     <JournalEntryModal
                         visible={showJournalModal}
                         onClose={() => setShowJournalModal(false)}
-                        onSave={(entry) => addJournalEntry(new Date(), entry)}
+                        onSave={async (entry) => {
+                            // Convert numeric mood to semantic string if needed
+                            const moodMap: Record<number, any> = {
+                                5: 'great',
+                                4: 'good',
+                                3: 'okay',
+                                2: 'struggling',
+                                1: 'difficult'
+                            };
+
+                            const semanticMood = typeof entry.mood === 'number'
+                                ? moodMap[entry.mood] || 'okay'
+                                : entry.mood;
+
+                            addJournalEntry(new Date(), {
+                                ...entry,
+                                mood: semanticMood
+                            });
+                        }}
                     />
 
                     <FoodItemModal

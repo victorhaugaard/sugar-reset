@@ -11,6 +11,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import { onboardingService, OnboardingData } from '../services/onboardingService';
 import { useAuthContext } from './AuthContext';
 import { userService } from '../services/userService';
+import { communityStatsService } from '../services/communityStatsService';
 import { StreakData, DailyCheckIn } from '../types';
 
 export interface JournalEntry {
@@ -122,7 +123,7 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
                     userService.getUserProfile(userId),
                     new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000))
                 ]);
-                
+
                 const profile = await profilePromise;
                 if (profile) {
                     setStreakData(profile.streak);
@@ -131,7 +132,7 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
                 // Non-blocking check-in fetch - don't wait for it
                 userService.getTodayCheckIn(userId)
                     .then(checkIn => setTodayCheckIn(checkIn))
-                    .catch(() => {}); // Silently ignore errors
+                    .catch(() => { }); // Silently ignore errors
             } else {
                 // Use local streak data from onboarding
                 if (localOnboarding.startDate) {
@@ -404,6 +405,9 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
                 goalAchieved: streakData.currentStreak > 0, // Simplified for now
                 feeling: todayCheckIn?.mood === 5 ? 'great' : todayCheckIn?.mood === 4 ? 'good' : todayCheckIn?.mood === 3 ? 'okay' : todayCheckIn?.mood ? 'struggling' : null,
                 updatedAt: new Date(),
+            }).then(() => {
+                // Trigger community stats update in the background
+                communityStatsService.triggerStatsUpdate();
             }).catch(err => {
                 console.error('Failed to sync user stats:', err);
             });

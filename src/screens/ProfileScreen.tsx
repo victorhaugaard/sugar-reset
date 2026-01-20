@@ -32,8 +32,6 @@ import { userService } from '../services/userService';
 import { useAuthContext } from '../context/AuthContext';
 import { useAuth } from '../hooks/useAuth';
 import { AppIcon } from '../components/OnboardingIcon';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { seedDatabase, testFirestoreConnection } from '../utils/seedDatabase';
 
 interface MenuItem {
     id: string;
@@ -73,18 +71,11 @@ const menuSections = [
             { id: 'terms', emoji: '📄', label: 'Terms of Service' },
         ],
     },
-    {
-        title: 'Developer',
-        items: [
-            { id: 'seed_db', emoji: '🌱', label: 'Seed Test Data' },
-            { id: 'test_connection', emoji: '🔌', label: 'Test Firestore' },
-        ],
-    },
 ];
 
 export default function ProfileScreen() {
     const { onboardingData, streakData, updateOnboardingData } = useUserData();
-    const { user, isAuthenticated } = useAuthContext();
+    const { user, isAuthenticated, firebaseUser } = useAuthContext();
     const { signOut } = useAuth();
     const navigation = useNavigation<any>();
     const [showPlanDetails, setShowPlanDetails] = useState(false);
@@ -95,6 +86,18 @@ export default function ProfileScreen() {
     const [usernameError, setUsernameError] = useState('');
     const [isSavingProfile, setIsSavingProfile] = useState(false);
 
+    // Determine auth provider type
+    const authProvider = useMemo((): 'google' | 'apple' | 'email' | 'unknown' => {
+        if (!firebaseUser || !firebaseUser.providerData || firebaseUser.providerData.length === 0) {
+            return 'unknown';
+        }
+        const providerId = firebaseUser.providerData[0]?.providerId || '';
+        if (providerId.includes('google')) return 'google';
+        if (providerId.includes('apple')) return 'apple';
+        if (providerId.includes('password')) return 'email';
+        return 'unknown';
+    }, [firebaseUser]);
+
     // Get user data from context
 
     // Get user data from context
@@ -102,8 +105,8 @@ export default function ProfileScreen() {
     const startDate = useMemo(() => new Date(startDateString), [startDateString]);
 
     // Get user data from context
-    const name = onboardingData.nickname || user?.displayName || 'Guest';
-    const email = user?.email || 'Not signed in';
+    const name = onboardingData.nickname || user?.displayName || firebaseUser?.displayName || 'Guest';
+    const email = firebaseUser?.email || user?.email || 'Not signed in';
     const daysSugarFree = streakData?.currentStreak || 0;
     const currentPlan = onboardingData.plan === 'cold_turkey' ? 'Cold Turkey' : 'Gradual Reduction';
     const plan = isAuthenticated ? 'Premium' : 'Free';
@@ -148,35 +151,6 @@ export default function ProfileScreen() {
                             await signOut();
                         } catch (error) {
                             console.error('Error signing out:', error);
-                        }
-                    }
-                },
-            ]
-        );
-    };
-
-
-
-
-
-
-    const handleClearAllData = () => {
-        Alert.alert(
-            'Clear All Data',
-            'This will delete all wellness logs, food logs, and reset your data for testing. Your onboarding data and streak will be preserved. Continue?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Clear Data',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await AsyncStorage.removeItem('wellness_logs');
-                            await AsyncStorage.removeItem('@sugar_reset_scanned_items');
-                            Alert.alert('Success', 'All wellness and food data has been cleared.');
-                        } catch (error) {
-                            console.error('Error clearing data:', error);
-                            Alert.alert('Error', 'Failed to clear data. Please try again.');
                         }
                     }
                 },
@@ -319,39 +293,7 @@ export default function ProfileScreen() {
                                                                             ? () => navigation.navigate('PrivacyPolicy')
                                                                             : item.id === 'terms'
                                                                                 ? () => navigation.navigate('TermsOfService')
-                                                                                : item.id === 'seed_db'
-                                                                                    ? async () => {
-                                                                                        if (!user) {
-                                                                                            Alert.alert('Error', 'You must be logged in');
-                                                                                            return;
-                                                                                        }
-                                                                                        Alert.alert(
-                                                                                            'Seed Database',
-                                                                                            'This will create sample posts, users, and stats for testing. Continue?',
-                                                                                            [
-                                                                                                { text: 'Cancel', style: 'cancel' },
-                                                                                                {
-                                                                                                    text: 'Seed',
-                                                                                                    onPress: async () => {
-                                                                                                        const result = await seedDatabase(user.id);
-                                                                                                        Alert.alert(
-                                                                                                            result.success ? 'Success!' : 'Error',
-                                                                                                            result.success ? 'Database seeded with test data. Refresh the Social tab!' : 'Failed to seed database'
-                                                                                                        );
-                                                                                                    }
-                                                                                                }
-                                                                                            ]
-                                                                                        );
-                                                                                    }
-                                                                                    : item.id === 'test_connection'
-                                                                                        ? async () => {
-                                                                                            const connected = await testFirestoreConnection();
-                                                                                            Alert.alert(
-                                                                                                connected ? 'Connected!' : 'Connection Failed',
-                                                                                                connected ? 'Firestore is working correctly' : 'Check your network and Firebase config'
-                                                                                            );
-                                                                                        }
-                                                                                        : undefined
+                                                                                : undefined
                                             }
                                         >
                                             <AppIcon emoji={item.emoji} size={20} />
@@ -367,25 +309,6 @@ export default function ProfileScreen() {
                                 </GlassCard>
                             </View>
                         ))}
-
-                        {/* Development Tools */}
-                        <View style={styles.menuSection}>
-                            <Text style={styles.sectionTitle}>Development</Text>
-                            <GlassCard variant="light" padding="none" style={styles.menuCard}>
-                                <TouchableOpacity
-                                    style={styles.menuItem}
-                                    activeOpacity={0.6}
-                                    onPress={handleClearAllData}
-                                >
-                                    <AppIcon emoji="🗑️" size={20} />
-                                    <View style={styles.menuLabelContainer}>
-                                        <Text style={[styles.menuLabel, { color: '#EF4444' }]}>Clear All Data</Text>
-                                        <Text style={styles.menuSubtext}>Reset wellness & food logs</Text>
-                                    </View>
-                                    <Text style={styles.menuArrow}>›</Text>
-                                </TouchableOpacity>
-                            </GlassCard>
-                        </View>
 
                         {/* Logout */}
                         <TouchableOpacity
@@ -428,6 +351,28 @@ export default function ProfileScreen() {
                             <TouchableOpacity activeOpacity={1} style={styles.editModalContent}>
                                 <Text style={styles.editModalTitle}>Edit Profile</Text>
 
+                                {/* Auth Provider Badge */}
+                                {authProvider !== 'unknown' && (
+                                    <View style={styles.authProviderBadge}>
+                                        <Text style={styles.authProviderIcon}>
+                                            {authProvider === 'google' ? '🔵' : authProvider === 'apple' ? '🍎' : '✉️'}
+                                        </Text>
+                                        <Text style={styles.authProviderText}>
+                                            Signed in with {authProvider === 'google' ? 'Google' : authProvider === 'apple' ? 'Apple' : 'Email'}
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {/* Email (Read-only) */}
+                                <Text style={styles.inputLabel}>Email</Text>
+                                <View style={styles.readOnlyField}>
+                                    <Text style={styles.readOnlyText}>{email}</Text>
+                                    {(authProvider === 'google' || authProvider === 'apple') && (
+                                        <Text style={styles.readOnlyHint}>Managed by {authProvider === 'google' ? 'Google' : 'Apple'}</Text>
+                                    )}
+                                </View>
+
+                                {/* Display Name */}
                                 <Text style={styles.inputLabel}>Display Name</Text>
                                 <TextInput
                                     style={styles.editInput}
@@ -436,20 +381,25 @@ export default function ProfileScreen() {
                                     placeholder="Your Name"
                                     placeholderTextColor={looviColors.text.muted}
                                 />
+                                <Text style={styles.fieldHint}>This is how you appear in the app</Text>
 
+                                {/* Username */}
                                 <Text style={styles.inputLabel}>Username (Unique)</Text>
                                 <TextInput
                                     style={[styles.editInput, usernameError ? { borderColor: '#EF4444', borderWidth: 1 } : {}]}
                                     value={editUsername}
                                     onChangeText={(text) => {
-                                        setEditUsername(text);
+                                        setEditUsername(text.toLowerCase().replace(/[^a-z0-9_]/g, ''));
                                         setUsernameError('');
                                     }}
                                     placeholder="username"
                                     placeholderTextColor={looviColors.text.muted}
                                     autoCapitalize="none"
+                                    autoCorrect={false}
                                 />
-                                {usernameError ? <Text style={styles.errorText}>{usernameError}</Text> : null}
+                                {usernameError ? <Text style={styles.errorText}>{usernameError}</Text> : (
+                                    <Text style={styles.fieldHint}>Used for friend connections</Text>
+                                )}
 
                                 <View style={styles.editModalButtons}>
                                     <TouchableOpacity
@@ -677,6 +627,51 @@ const styles = StyleSheet.create({
     errorText: {
         fontSize: 12,
         color: '#EF4444',
+        marginBottom: spacing.md,
+        marginTop: -spacing.sm,
+        marginLeft: spacing.xs,
+    },
+    authProviderBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(59, 130, 246, 0.08)',
+        borderRadius: borderRadius.lg,
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.md,
+        marginBottom: spacing.lg,
+        gap: spacing.xs,
+    },
+    authProviderIcon: {
+        fontSize: 14,
+    },
+    authProviderText: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: looviColors.text.secondary,
+    },
+    readOnlyField: {
+        backgroundColor: 'rgba(0, 0, 0, 0.02)',
+        borderRadius: borderRadius.lg,
+        padding: spacing.md,
+        marginBottom: spacing.md,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 0, 0, 0.05)',
+        borderStyle: 'dashed',
+    },
+    readOnlyText: {
+        fontSize: 16,
+        color: looviColors.text.tertiary,
+    },
+    readOnlyHint: {
+        fontSize: 11,
+        color: looviColors.text.muted,
+        marginTop: spacing.xs,
+        fontStyle: 'italic',
+    },
+    fieldHint: {
+        fontSize: 11,
+        color: looviColors.text.muted,
         marginBottom: spacing.md,
         marginTop: -spacing.sm,
         marginLeft: spacing.xs,

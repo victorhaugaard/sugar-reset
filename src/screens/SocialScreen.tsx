@@ -26,7 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { spacing, borderRadius, typography } from '../theme';
 import LooviBackground, { looviColors } from '../components/LooviBackground';
 import { GlassCard } from '../components/GlassCard';
-import { SwipeableTabView } from '../components/SwipeableTabView';
+
 import { FriendSearchModal } from '../components/FriendSearchModal';
 import { FriendRequestCard } from '../components/FriendRequestCard';
 import { CommunityStatsWidget } from '../components/CommunityStatsWidget';
@@ -255,8 +255,16 @@ export default function SocialScreen() {
         const handleUpvote = async (postId: string) => {
             if (!user) return;
             try {
+                // Optimistic update
+                setPosts(prev => prev.map(p => {
+                    if (p.id === postId) {
+                        return { ...p, upvotes: p.upvotes + 1 }; // Simplified optimistic update
+                    }
+                    return p;
+                }));
                 await postService.upvotePost(postId, user.id);
-                await loadPosts(); // Refresh to get updated vote count
+                // Background refresh to sync
+                loadPosts();
             } catch (error) {
                 console.error('Error upvoting:', error);
             }
@@ -267,7 +275,7 @@ export default function SocialScreen() {
                 {/* Community Stats Widget */}
                 <CommunityStatsWidget />
 
-                {/* Filter Tabs */}
+                {/* Filter Tabs - Minimal Design */}
                 <View style={styles.filterRow}>
                     {(['new', 'hot', 'top'] as const).map((filter) => (
                         <TouchableOpacity
@@ -295,54 +303,35 @@ export default function SocialScreen() {
                     </GlassCard>
                 ) : (
                     posts.map((post: Post) => (
-                        <TouchableOpacity key={post.id} activeOpacity={0.8}>
-                            <GlassCard variant="light" padding="md" style={styles.postCard}>
+                        <TouchableOpacity key={post.id} activeOpacity={0.9}>
+                            <GlassCard variant="light" padding="lg" style={styles.postCard}>
                                 {/* Post Header */}
                                 <View style={styles.postHeader}>
                                     <View style={styles.authorInfo}>
-                                        <View style={[styles.authorAvatar, { backgroundColor: looviColors.accent.primary }]}>
-                                            <Text style={styles.authorInitial}>{post.authorName[0]?.toUpperCase()}</Text>
-                                        </View>
-                                        <View>
-                                            <Text style={styles.authorName}>{post.authorName}</Text>
-                                            <Text style={styles.postTime}>{postService.getTimeAgo(post.createdAt)}</Text>
-                                        </View>
+                                        <Text style={styles.authorName}>{post.authorName}</Text>
+                                        <Text style={styles.postDot}>•</Text>
+                                        <Text style={styles.postTime}>{postService.getTimeAgo(post.createdAt)}</Text>
                                     </View>
-                                    <TouchableOpacity style={styles.moreButton}>
-                                        <Ionicons name="ellipsis-horizontal" size={18} color={looviColors.text.tertiary} />
-                                    </TouchableOpacity>
                                 </View>
 
                                 {/* Post Content */}
                                 <Text style={styles.postTitle}>{post.title}</Text>
-                                <Text style={styles.postContent} numberOfLines={3}>{post.content}</Text>
+                                <Text style={styles.postContent} numberOfLines={4}>{post.content}</Text>
 
-                                {/* Tags */}
-                                {post.tags.length > 0 && (
+                                {/* Simple Footer: Tags & Upvote */}
+                                <View style={styles.postFooter}>
                                     <View style={styles.tagsRow}>
-                                        {post.tags.map((tag: string, idx: number) => (
-                                            <View key={idx} style={styles.tag}>
-                                                <Text style={styles.tagText}>#{tag}</Text>
-                                            </View>
+                                        {post.tags.slice(0, 3).map((tag: string, idx: number) => (
+                                            <Text key={idx} style={styles.tagText}>#{tag}</Text>
                                         ))}
                                     </View>
-                                )}
 
-                                {/* Post Actions */}
-                                <View style={styles.postActions}>
                                     <TouchableOpacity
-                                        style={styles.actionButton}
+                                        style={styles.minimalUpvoteButton}
                                         onPress={() => handleUpvote(post.id)}
                                     >
-                                        <Ionicons name="arrow-up-circle-outline" size={20} color={looviColors.accent.primary} />
-                                        <Text style={styles.actionText}>{post.upvotes}</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity style={styles.actionButton}>
-                                        <Ionicons name="chatbubble-outline" size={18} color={looviColors.text.tertiary} />
-                                        <Text style={styles.actionText}>{post.commentCount}</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity style={styles.actionButton}>
-                                        <Ionicons name="share-social-outline" size={18} color={looviColors.text.tertiary} />
+                                        <Ionicons name="arrow-up" size={16} color={looviColors.text.secondary} />
+                                        <Text style={styles.minimalUpvoteText}>{post.upvotes}</Text>
                                     </TouchableOpacity>
                                 </View>
                             </GlassCard>
@@ -350,15 +339,7 @@ export default function SocialScreen() {
                     ))
                 )}
 
-                {/* New Post Button */}
-                <TouchableOpacity
-                    style={styles.newPostButton}
-                    activeOpacity={0.9}
-                    onPress={() => setShowCreatePostModal(true)}
-                >
-                    <Ionicons name="add-circle" size={24} color="#FFFFFF" />
-                    <Text style={styles.newPostText}>Share Your Journey</Text>
-                </TouchableOpacity>
+
             </View>
         );
     };
@@ -369,8 +350,10 @@ export default function SocialScreen() {
             {friendRequests.length > 0 && (
                 <View style={styles.requestsSection}>
                     <View style={styles.sectionHeader}>
-                        <Ionicons name="mail" size={18} color={looviColors.accent.primary} />
-                        <Text style={styles.sectionTitle}>Friend Requests ({friendRequests.length})</Text>
+                        <Text style={styles.sectionTitle}>Requests</Text>
+                        <View style={styles.badge}>
+                            <Text style={styles.badgeText}>{friendRequests.length}</Text>
+                        </View>
                     </View>
                     {friendRequests.map((request) => (
                         <FriendRequestCard
@@ -385,8 +368,7 @@ export default function SocialScreen() {
 
             {/* Friends List */}
             <View style={styles.sectionHeader}>
-                <Ionicons name="people" size={18} color={looviColors.text.primary} />
-                <Text style={styles.sectionTitle}>My Inner Circle ({friends.length})</Text>
+                <Text style={styles.sectionTitle}>Your Circle</Text>
             </View>
 
             {isLoading ? (
@@ -403,35 +385,26 @@ export default function SocialScreen() {
                 friends.map((friend) => (
                     <TouchableOpacity
                         key={friend.uid}
-                        activeOpacity={0.8}
                         onLongPress={() => handleRemoveFriend(friend.uid, friend.displayName)}
+                        activeOpacity={0.7}
                     >
                         <GlassCard variant="light" padding="md" style={styles.friendCard}>
                             <View style={styles.friendRow}>
-                                <View style={[styles.friendAvatar, { backgroundColor: looviColors.accent.primary }]}>
+                                <View style={[styles.friendAvatar, { backgroundColor: looviColors.accent.secondary }]}>
                                     <Text style={styles.friendInitial}>
                                         {friend.displayName?.[0]?.toUpperCase() || '?'}
                                     </Text>
                                 </View>
                                 <View style={styles.friendInfo}>
                                     <Text style={styles.friendName}>{friend.displayName}</Text>
-                                    {friend.username && (
-                                        <Text style={styles.friendUsername}>@{friend.username}</Text>
-                                    )}
-                                    <View style={styles.friendStats}>
-                                        <View style={styles.friendStat}>
-                                            <Ionicons name="heart" size={12} color={looviColors.accent.primary} />
-                                            <Text style={styles.friendStatText}>Score: {friend.healthScore}</Text>
-                                        </View>
-                                        <View style={styles.friendStat}>
-                                            <Ionicons name="flame" size={12} color={looviColors.accent.warning} />
-                                            <Text style={styles.friendStatText}>{friend.streak} days</Text>
-                                        </View>
+                                    <Text style={styles.friendUsername}>@{friend.username}</Text>
+                                </View>
+                                <View style={styles.friendStats}>
+                                    <View style={styles.miniStat}>
+                                        <Text style={styles.miniStatValue}>{friend.streak || 0}</Text>
+                                        <Text style={styles.miniStatLabel}>Day streak</Text>
                                     </View>
                                 </View>
-                                <TouchableOpacity style={styles.chatButton}>
-                                    <Ionicons name="chatbubble-ellipses-outline" size={20} color={looviColors.accent.primary} />
-                                </TouchableOpacity>
                             </View>
                         </GlassCard>
                     </TouchableOpacity>
@@ -440,31 +413,13 @@ export default function SocialScreen() {
 
             {/* Add Friends CTA */}
             <TouchableOpacity
-                style={styles.addFriendButton}
-                activeOpacity={0.9}
+                style={styles.outlineButton}
+                activeOpacity={0.8}
                 onPress={() => setShowSearchModal(true)}
             >
-                <Ionicons name="person-add" size={20} color={looviColors.accent.primary} />
-                <Text style={styles.addFriendText}>Find Accountability Partners</Text>
+                <Ionicons name="person-add-outline" size={20} color={looviColors.accent.primary} />
+                <Text style={styles.outlineButtonText}>Find Partners</Text>
             </TouchableOpacity>
-
-            {/* Friend Search */}
-            <GlassCard variant="light" padding="md" style={styles.searchCard}>
-                <Text style={styles.searchTitle}>Search by Username</Text>
-                <View style={styles.searchBox}>
-                    <Ionicons name="search" size={18} color={looviColors.text.muted} />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Enter username..."
-                        placeholderTextColor={looviColors.text.muted}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        onSubmitEditing={handleSearchInline}
-                        returnKeyType="search"
-                        autoCapitalize="none"
-                    />
-                </View>
-            </GlassCard>
         </View>
     );
 
@@ -473,10 +428,6 @@ export default function SocialScreen() {
             {/* Leaderboard Type Selector */}
             <View style={styles.leaderboardHeader}>
                 <Text style={styles.leaderboardTitle}>Top Users This Week</Text>
-                <TouchableOpacity style={styles.timeFilter}>
-                    <Text style={styles.timeFilterText}>This Week</Text>
-                    <Ionicons name="chevron-down" size={16} color={looviColors.text.primary} />
-                </TouchableOpacity>
             </View>
 
             {isLoading ? (
@@ -496,30 +447,22 @@ export default function SocialScreen() {
                         <GlassCard key={entry.userId} variant="light" padding="md" style={styles.leaderboardCard}>
                             <View style={styles.leaderboardRow}>
                                 <View style={styles.rankBadge}>
-                                    {entry.badge ? (
-                                        <Text style={styles.rankBadgeEmoji}>{entry.badge}</Text>
+                                    {entry.rank <= 3 ? (
+                                        <Text style={styles.rankEmoji}>
+                                            {entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : '🥉'}
+                                        </Text>
                                     ) : (
                                         <Text style={styles.rankNumber}>{entry.rank}</Text>
                                     )}
                                 </View>
                                 <View style={styles.leaderboardInfo}>
                                     <Text style={styles.leaderboardName}>{entry.name}</Text>
-                                    <View style={styles.leaderboardStats}>
-                                        <View style={styles.leaderboardStat}>
-                                            <Ionicons name="heart" size={12} color={looviColors.accent.primary} />
-                                            <Text style={styles.leaderboardStatText}>{entry.score}</Text>
-                                        </View>
-                                        <View style={styles.leaderboardStat}>
-                                            <Ionicons name="flame" size={12} color={looviColors.accent.warning} />
-                                            <Text style={styles.leaderboardStatText}>{entry.streak}d</Text>
-                                        </View>
-                                    </View>
+                                    <Text style={styles.leaderboardScore}>{entry.score} pts</Text>
                                 </View>
-                                {entry.userId !== user?.id && (
-                                    <TouchableOpacity style={styles.followButton}>
-                                        <Text style={styles.followButtonText}>Add</Text>
-                                    </TouchableOpacity>
-                                )}
+                                <View style={styles.streakBadge}>
+                                    <Ionicons name="flame" size={14} color="#FFFFFF" />
+                                    <Text style={styles.streakBadgeText}>{entry.streak}</Text>
+                                </View>
                             </View>
                         </GlassCard>
                     ))}
@@ -527,137 +470,127 @@ export default function SocialScreen() {
             )}
 
             {/* Your Rank */}
-            <GlassCard variant="light" padding="md" style={[styles.leaderboardCard, styles.yourRankCard]}>
-                <View style={styles.yourRankHeader}>
-                    <Ionicons name="trophy" size={20} color={looviColors.accent.primary} />
-                    <Text style={styles.yourRankTitle}>Your Rank</Text>
-                </View>
-                <View style={styles.leaderboardRow}>
-                    <View style={styles.rankBadge}>
-                        <Text style={styles.rankNumber}>{userRank || '—'}</Text>
-                    </View>
-                    <View style={styles.leaderboardInfo}>
-                        <Text style={styles.leaderboardName}>You</Text>
-                        <View style={styles.leaderboardStats}>
-                            <View style={styles.leaderboardStat}>
-                                <Ionicons name="heart" size={12} color={looviColors.accent.primary} />
-                                <Text style={styles.leaderboardStatText}>{userScore}</Text>
+            {userRank > 0 && (
+                <View style={styles.yourRankContainer}>
+                    <Text style={styles.yourRankLabel}>Your Rank</Text>
+                    <GlassCard variant="light" padding="md" style={[styles.leaderboardCard, styles.yourRankCard]}>
+                        <View style={styles.leaderboardRow}>
+                            <View style={styles.rankBadge}>
+                                <Text style={styles.rankNumber}>{userRank}</Text>
                             </View>
-                            <View style={styles.leaderboardStat}>
-                                <Ionicons name="flame" size={12} color={looviColors.accent.warning} />
-                                <Text style={styles.leaderboardStatText}>{userStreak}d</Text>
+                            <View style={styles.leaderboardInfo}>
+                                <Text style={styles.leaderboardName}>You</Text>
+                                <Text style={styles.leaderboardScore}>{userScore} pts</Text>
+                            </View>
+                            <View style={styles.streakBadge}>
+                                <Ionicons name="flame" size={14} color="#FFFFFF" />
+                                <Text style={styles.streakBadgeText}>{userStreak}</Text>
                             </View>
                         </View>
-                    </View>
-                    <View style={styles.rankBadgeInfo}>
-                        <Text style={styles.rankBadgeInfoText}>Keep going!</Text>
-                    </View>
+                    </GlassCard>
                 </View>
-            </GlassCard>
+            )}
         </View>
     );
 
     return (
-        <SwipeableTabView currentTab="Social">
-            <LooviBackground variant="coralTop">
-                <SafeAreaView style={styles.container}>
-                    {/* Header */}
-                    <View style={styles.header}>
-                        <View>
-                            <Text style={styles.title}>Community</Text>
-                            <Text style={styles.subtitle}>Support each other's journey</Text>
-                        </View>
-                        <TouchableOpacity
-                            style={styles.profileButton}
-                            onPress={handleProfilePress}
-                            activeOpacity={0.7}
-                        >
-                            <Ionicons name="person" size={22} color={looviColors.text.primary} />
-                        </TouchableOpacity>
-                    </View>
+        <LooviBackground variant="blueTop">
+            <SafeAreaView style={styles.container} edges={['top']}>
+                <View style={styles.header}>
+                    <Text style={styles.title}>Community</Text>
+                    <TouchableOpacity
+                        style={styles.profileButton}
+                        onPress={handleProfilePress}
+                    >
+                        {user?.photoURL ? (
+                            // Add image component if available
+                            <View style={styles.profileAvatarPlaceholder} />
+                        ) : (
+                            <View style={styles.profileAvatarPlaceholder}>
+                                <Text style={styles.profileInitial}>
+                                    {user?.displayName?.[0]?.toUpperCase() || 'U'}
+                                </Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                </View>
 
-                    {/* Tab Selector */}
-                    <View style={styles.tabSelector}>
-                        <TouchableOpacity
-                            style={[styles.tab, activeTab === 'community' && styles.tabActive]}
-                            onPress={() => setActiveTab('community')}
-                        >
-                            <Ionicons
-                                name="chatbubbles"
-                                size={20}
-                                color={activeTab === 'community' ? looviColors.accent.primary : looviColors.text.muted}
-                            />
-                            <Text style={[styles.tabText, activeTab === 'community' && styles.tabTextActive]}>
-                                Forum
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.tab, activeTab === 'circle' && styles.tabActive]}
-                            onPress={() => setActiveTab('circle')}
-                        >
-                            <Ionicons
-                                name="people"
-                                size={20}
-                                color={activeTab === 'circle' ? looviColors.accent.primary : looviColors.text.muted}
-                            />
-                            <Text style={[styles.tabText, activeTab === 'circle' && styles.tabTextActive]}>
-                                Friends
+                {/* Main Tab Selector */}
+                <View style={styles.tabSelector}>
+                    <TouchableOpacity
+                        style={[styles.mainTab, activeTab === 'community' && styles.mainTabActive]}
+                        onPress={() => setActiveTab('community')}
+                    >
+                        <Text style={[styles.mainTabText, activeTab === 'community' && styles.mainTabTextActive]}>
+                            Feed
+                        </Text>
+                        {activeTab === 'community' && <View style={styles.activeIndicator} />}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.mainTab, activeTab === 'circle' && styles.mainTabActive]}
+                        onPress={() => setActiveTab('circle')}
+                    >
+                        <View style={styles.tabLabelContainer}>
+                            <Text style={[styles.mainTabText, activeTab === 'circle' && styles.mainTabTextActive]}>
+                                Inner Circle
                             </Text>
                             {friendRequests.length > 0 && (
-                                <View style={styles.badge}>
-                                    <Text style={styles.badgeText}>{friendRequests.length}</Text>
+                                <View style={styles.tabBadge}>
+                                    <Text style={styles.tabBadgeText}>{friendRequests.length}</Text>
                                 </View>
                             )}
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.tab, activeTab === 'leaderboard' && styles.tabActive]}
-                            onPress={() => setActiveTab('leaderboard')}
-                        >
-                            <Ionicons
-                                name="trophy"
-                                size={20}
-                                color={activeTab === 'leaderboard' ? looviColors.accent.primary : looviColors.text.muted}
-                            />
-                            <Text style={[styles.tabText, activeTab === 'leaderboard' && styles.tabTextActive]}>
-                                Leaders
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
+                        </View>
+                        {activeTab === 'circle' && <View style={styles.activeIndicator} />}
+                    </TouchableOpacity>
 
-                    {/* Tab Content */}
-                    <ScrollView
-                        style={styles.scrollView}
-                        contentContainerStyle={styles.scrollContent}
-                        showsVerticalScrollIndicator={false}
-                        refreshControl={
-                            <RefreshControl
-                                refreshing={isRefreshing}
-                                onRefresh={handleRefresh}
-                                tintColor={looviColors.accent.primary}
-                            />
-                        }
+                    <TouchableOpacity
+                        style={[styles.mainTab, activeTab === 'leaderboard' && styles.mainTabActive]}
+                        onPress={() => setActiveTab('leaderboard')}
                     >
-                        {activeTab === 'community' && renderCommunityTab()}
-                        {activeTab === 'circle' && renderInnerCircleTab()}
-                        {activeTab === 'leaderboard' && renderLeaderboardTab()}
-                    </ScrollView>
+                        <Text style={[styles.mainTabText, activeTab === 'leaderboard' && styles.mainTabTextActive]}>
+                            Leaderboard
+                        </Text>
+                        {activeTab === 'leaderboard' && <View style={styles.activeIndicator} />}
+                    </TouchableOpacity>
+                </View>
 
-                    {/* Friend Search Modal */}
-                    <FriendSearchModal
-                        visible={showSearchModal}
-                        onClose={() => setShowSearchModal(false)}
-                        onRequestSent={loadData}
-                    />
+                <ScrollView
+                    style={styles.content}
+                    contentContainerStyle={styles.scrollContent}
+                    refreshControl={
+                        <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+                    }
+                    showsVerticalScrollIndicator={false}
+                >
+                    {activeTab === 'community' && renderCommunityTab()}
+                    {activeTab === 'circle' && renderInnerCircleTab()}
+                    {activeTab === 'leaderboard' && renderLeaderboardTab()}
+                </ScrollView>
 
-                    {/* Create Post Modal */}
-                    <CreatePostModal
-                        visible={showCreatePostModal}
-                        onClose={() => setShowCreatePostModal(false)}
-                        onPostCreated={loadPosts}
-                    />
-                </SafeAreaView>
-            </LooviBackground>
-        </SwipeableTabView>
+                {/* Floating Action Button - Fixed position */}
+                {activeTab === 'community' && (
+                    <TouchableOpacity
+                        style={styles.floatingFab}
+                        activeOpacity={0.9}
+                        onPress={() => setShowCreatePostModal(true)}
+                    >
+                        <Ionicons name="add" size={30} color="#FFFFFF" />
+                    </TouchableOpacity>
+                )}
+
+                <FriendSearchModal
+                    visible={showSearchModal}
+                    onClose={() => setShowSearchModal(false)}
+                />
+
+                <CreatePostModal
+                    visible={showCreatePostModal}
+                    onClose={() => setShowCreatePostModal(false)}
+                    onPostCreated={loadPosts}
+                />
+            </SafeAreaView>
+        </LooviBackground>
     );
 }
 
@@ -668,251 +601,258 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         paddingHorizontal: spacing.screen.horizontal,
-        paddingTop: spacing.md,
-        paddingBottom: spacing.sm,
+        paddingVertical: spacing.md,
     },
     title: {
-        fontFamily: typography.fonts.heading.bold,
-        fontSize: 28,
+        fontSize: 32,
+        fontWeight: '800',
         color: looviColors.text.primary,
-        letterSpacing: -0.5,
-    },
-    subtitle: {
-        fontSize: 15,
-        fontWeight: '400',
-        color: looviColors.text.secondary,
-        marginTop: spacing.xs,
+        letterSpacing: -1,
     },
     profileButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+        padding: 4,
+    },
+    profileAvatarPlaceholder: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(255, 255, 255, 0.4)',
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(0, 0, 0, 0.08)',
+        borderColor: 'rgba(255, 255, 255, 0.6)',
     },
-    // Tab Selector
+    profileInitial: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+    },
+    /* Main Tab Selector */
     tabSelector: {
         flexDirection: 'row',
         paddingHorizontal: spacing.screen.horizontal,
-        marginTop: spacing.md,
-        marginBottom: spacing.sm,
-        gap: spacing.sm,
+        marginBottom: spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(0,0,0,0.05)',
     },
-    tab: {
-        flex: 1,
+    mainTab: {
+        marginRight: spacing.xl,
+        paddingVertical: spacing.sm,
+        position: 'relative',
+    },
+    mainTabActive: {
+        // Active state styling if needed
+    },
+    mainTabText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: looviColors.text.tertiary,
+    },
+    mainTabTextActive: {
+        color: looviColors.text.primary,
+        fontWeight: '700',
+    },
+    activeIndicator: {
+        position: 'absolute',
+        bottom: -1, // Overlap border
+        left: 0,
+        right: 0,
+        height: 3,
+        backgroundColor: looviColors.accent.primary,
+        borderRadius: 1.5,
+    },
+    tabLabelContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: spacing.xs,
-        paddingVertical: spacing.sm,
-        borderRadius: borderRadius.lg,
-        backgroundColor: 'rgba(255, 255, 255, 0.5)',
+        gap: 6,
     },
-    tabActive: {
-        backgroundColor: '#FFFFFF',
-        shadowColor: looviColors.accent.primary,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    tabText: {
-        fontFamily: typography.fonts.heading.semibold,
-        fontSize: 14,
-        color: looviColors.text.muted,
-    },
-    tabTextActive: {
-        color: looviColors.accent.primary,
-    },
-    badge: {
+    tabBadge: {
         backgroundColor: looviColors.accent.primary,
+        paddingHorizontal: 5,
+        paddingVertical: 1,
         borderRadius: 10,
-        minWidth: 20,
-        height: 20,
+        minWidth: 18,
         alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: 6,
     },
-    badgeText: {
-        fontSize: 11,
+    tabBadgeText: {
+        fontSize: 10,
         fontWeight: '700',
         color: '#FFFFFF',
     },
-    scrollView: {
+    /* Content */
+    content: {
         flex: 1,
     },
     scrollContent: {
-        paddingHorizontal: spacing.screen.horizontal,
-        paddingBottom: 100,
+        padding: spacing.screen.horizontal,
+        paddingBottom: 100, // Space for FAB
     },
     tabContent: {
-        flex: 1,
+        gap: spacing.md,
     },
     loader: {
         marginTop: spacing.xl,
     },
-    // Empty State
     emptyCard: {
         alignItems: 'center',
-        marginTop: spacing.lg,
+        justifyContent: 'center',
+        marginTop: spacing.xl,
     },
     emptyTitle: {
         fontSize: 18,
-        fontWeight: '600',
+        fontWeight: '700',
         color: looviColors.text.primary,
         marginTop: spacing.md,
+        marginBottom: spacing.xs,
     },
     emptyText: {
         fontSize: 14,
         color: looviColors.text.tertiary,
         textAlign: 'center',
-        marginTop: spacing.sm,
+        maxWidth: 260,
+        lineHeight: 20,
     },
-    // Community Tab - Filter
+    /* Filter Tabs */
     filterRow: {
         flexDirection: 'row',
-        gap: spacing.sm,
-        marginBottom: spacing.md,
+        marginBottom: spacing.sm,
+        gap: spacing.lg,
+        paddingHorizontal: spacing.xs,
     },
     filterTab: {
-        paddingHorizontal: spacing.md,
         paddingVertical: spacing.xs,
-        borderRadius: borderRadius.lg,
-        backgroundColor: 'rgba(255, 255, 255, 0.5)',
     },
     filterTabActive: {
-        backgroundColor: looviColors.accent.primary,
+        borderBottomWidth: 2,
+        borderBottomColor: looviColors.text.primary,
     },
     filterText: {
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: '600',
         color: looviColors.text.tertiary,
     },
     filterTextActive: {
-        color: '#FFFFFF',
+        color: looviColors.text.primary,
     },
-    // Post Card
+    /* Post Card */
     postCard: {
         marginBottom: spacing.md,
+        backgroundColor: 'rgba(255, 255, 255, 0.7)',
     },
     postHeader: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: spacing.sm,
     },
     authorInfo: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.sm,
-    },
-    authorAvatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    authorInitial: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#FFFFFF',
     },
     authorName: {
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '600',
-        color: looviColors.text.primary,
+        color: looviColors.text.secondary,
+    },
+    postDot: {
+        marginHorizontal: 6,
+        color: looviColors.text.muted,
+        fontSize: 10,
     },
     postTime: {
-        fontSize: 11,
-        fontWeight: '400',
-        color: looviColors.text.tertiary,
-    },
-    moreButton: {
-        padding: spacing.xs,
+        fontSize: 12,
+        color: looviColors.text.muted,
     },
     postTitle: {
-        fontFamily: typography.fonts.heading.bold,
         fontSize: 16,
+        fontWeight: '700',
         color: looviColors.text.primary,
-        marginBottom: spacing.xs,
+        marginBottom: 6,
+        lineHeight: 22,
     },
     postContent: {
         fontSize: 14,
-        fontWeight: '400',
         color: looviColors.text.secondary,
         lineHeight: 20,
-        marginBottom: spacing.sm,
+        marginBottom: spacing.md,
+    },
+    postFooter: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
     },
     tagsRow: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.xs,
-        marginBottom: spacing.sm,
-    },
-    tag: {
-        paddingHorizontal: spacing.sm,
-        paddingVertical: 4,
-        backgroundColor: `${looviColors.accent.primary}15`,
-        borderRadius: borderRadius.md,
+        gap: spacing.sm,
     },
     tagText: {
-        fontSize: 11,
-        fontWeight: '600',
+        fontSize: 12,
+        fontWeight: '500',
         color: looviColors.accent.primary,
     },
-    postActions: {
+    minimalUpvoteButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.lg,
-        paddingTop: spacing.sm,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(0, 0, 0, 0.05)',
+        gap: 6,
+        backgroundColor: 'rgba(0, 0, 0, 0.03)',
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 12,
     },
-    actionButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    actionText: {
-        fontSize: 13,
+    minimalUpvoteText: {
+        fontSize: 12,
         fontWeight: '600',
-        color: looviColors.text.tertiary,
+        color: looviColors.text.primary,
     },
-    newPostButton: {
-        flexDirection: 'row',
+    /* Floating Action Button */
+    floatingFab: {
+        position: 'absolute',
+        bottom: 110,
+        right: 20,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: looviColors.accent.primary,
         alignItems: 'center',
         justifyContent: 'center',
-        gap: spacing.sm,
-        backgroundColor: looviColors.accent.primary,
-        paddingVertical: spacing.md,
-        borderRadius: borderRadius.xl,
-        marginTop: spacing.md,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 10,
+        // Make sure it's above everything
+        zIndex: 9999,
     },
-    newPostText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: '#FFFFFF',
-    },
-    // Inner Circle Tab
+    /* Inner Circle Styles */
     requestsSection: {
-        marginBottom: spacing.lg,
+        marginBottom: spacing.md,
     },
     sectionHeader: {
         flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        gap: spacing.sm,
-        marginBottom: spacing.md,
+        marginTop: spacing.md,
+        marginBottom: spacing.sm,
+        paddingHorizontal: spacing.xs,
     },
     sectionTitle: {
-        fontFamily: typography.fonts.heading.semibold,
         fontSize: 16,
+        fontWeight: '700',
         color: looviColors.text.primary,
+    },
+    badge: {
+        backgroundColor: looviColors.accent.primary,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 10,
+    },
+    badgeText: {
+        color: '#FFFFFF',
+        fontSize: 11,
+        fontWeight: '700',
     },
     friendCard: {
         marginBottom: spacing.sm,
@@ -922,120 +862,69 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     friendAvatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
-        position: 'relative',
+        marginRight: spacing.md,
     },
     friendInitial: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '700',
         color: '#FFFFFF',
     },
     friendInfo: {
         flex: 1,
-        marginLeft: spacing.md,
     },
     friendName: {
         fontSize: 15,
         fontWeight: '600',
         color: looviColors.text.primary,
-        marginBottom: 2,
     },
     friendUsername: {
         fontSize: 12,
         color: looviColors.text.tertiary,
-        marginBottom: 4,
     },
     friendStats: {
-        flexDirection: 'row',
-        gap: spacing.md,
+        alignItems: 'flex-end',
     },
-    friendStat: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
+    miniStat: {
+        alignItems: 'flex-end',
     },
-    friendStatText: {
-        fontSize: 12,
-        fontWeight: '500',
+    miniStatValue: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: looviColors.accent.warning,
+    },
+    miniStatLabel: {
+        fontSize: 10,
         color: looviColors.text.tertiary,
     },
-    chatButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: `${looviColors.accent.primary}15`,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    addFriendButton: {
+    outlineButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: spacing.sm,
-        paddingVertical: spacing.md,
-        borderRadius: borderRadius.xl,
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-        borderWidth: 2,
+        padding: spacing.md,
+        borderRadius: borderRadius.lg,
+        borderWidth: 1,
         borderColor: looviColors.accent.primary,
         borderStyle: 'dashed',
-        marginVertical: spacing.md,
+        marginTop: spacing.md,
+        gap: spacing.sm,
     },
-    addFriendText: {
+    outlineButtonText: {
         fontSize: 14,
         fontWeight: '600',
         color: looviColors.accent.primary,
     },
-    searchCard: {
-        marginTop: spacing.md,
-    },
-    searchTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: looviColors.text.primary,
-        marginBottom: spacing.sm,
-    },
-    searchBox: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.sm,
-        backgroundColor: 'rgba(0, 0, 0, 0.03)',
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
-        borderRadius: borderRadius.lg,
-    },
-    searchInput: {
-        flex: 1,
-        fontSize: 14,
-        color: looviColors.text.primary,
-    },
-    // Leaderboard Tab
+    /* Leaderboard Styles */
     leaderboardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
         marginBottom: spacing.md,
     },
     leaderboardTitle: {
-        fontFamily: typography.fonts.heading.semibold,
         fontSize: 18,
-        color: looviColors.text.primary,
-    },
-    timeFilter: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: spacing.sm,
-        paddingVertical: 4,
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-        borderRadius: borderRadius.md,
-    },
-    timeFilterText: {
-        fontSize: 12,
-        fontWeight: '600',
+        fontWeight: '700',
         color: looviColors.text.primary,
     },
     leaderboardCard: {
@@ -1046,82 +935,58 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     rankBadge: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: `${looviColors.accent.primary}15`,
+        width: 30,
         alignItems: 'center',
-        justifyContent: 'center',
+        marginRight: spacing.md,
     },
-    rankBadgeEmoji: {
-        fontSize: 20,
+    rankEmoji: {
+        fontSize: 22,
     },
     rankNumber: {
         fontSize: 16,
         fontWeight: '700',
-        color: looviColors.accent.primary,
+        color: looviColors.text.tertiary,
     },
     leaderboardInfo: {
         flex: 1,
-        marginLeft: spacing.md,
     },
     leaderboardName: {
-        fontFamily: typography.fonts.heading.semibold,
         fontSize: 15,
+        fontWeight: '600',
         color: looviColors.text.primary,
-        marginBottom: 4,
     },
-    leaderboardStats: {
-        flexDirection: 'row',
-        gap: spacing.md,
+    leaderboardScore: {
+        fontSize: 12,
+        color: looviColors.text.tertiary,
     },
-    leaderboardStat: {
+    streakBadge: {
         flexDirection: 'row',
         alignItems: 'center',
+        backgroundColor: looviColors.accent.warning,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
         gap: 4,
     },
-    leaderboardStatText: {
+    streakBadgeText: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    yourRankContainer: {
+        marginTop: spacing.xl,
+        paddingTop: spacing.lg,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0, 0, 0, 0.05)',
+    },
+    yourRankLabel: {
         fontSize: 12,
         fontWeight: '600',
         color: looviColors.text.tertiary,
-    },
-    followButton: {
-        paddingHorizontal: spacing.md,
-        paddingVertical: 6,
-        borderRadius: borderRadius.lg,
-        backgroundColor: looviColors.accent.primary,
-    },
-    followButtonText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#FFFFFF',
+        marginBottom: spacing.sm,
+        textTransform: 'uppercase',
     },
     yourRankCard: {
-        backgroundColor: `${looviColors.accent.primary}10`,
-        borderWidth: 2,
-        borderColor: looviColors.accent.primary,
-        marginTop: spacing.lg,
-    },
-    yourRankHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.xs,
-        marginBottom: spacing.sm,
-    },
-    yourRankTitle: {
-        fontFamily: typography.fonts.heading.bold,
-        fontSize: 14,
-        color: looviColors.accent.primary,
-    },
-    rankBadgeInfo: {
-        paddingHorizontal: spacing.sm,
-        paddingVertical: 4,
-        backgroundColor: looviColors.accent.success,
-        borderRadius: borderRadius.md,
-    },
-    rankBadgeInfoText: {
-        fontSize: 11,
-        fontWeight: '600',
-        color: '#FFFFFF',
+        // specific styles for your rank card if needed
     },
 });

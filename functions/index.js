@@ -8,7 +8,7 @@
 const { setGlobalOptions } = require("firebase-functions");
 const { onCall, HttpsError } = require("firebase-functions/https");
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 
 // Initialize Firebase Admin
 initializeApp();
@@ -142,5 +142,86 @@ exports.getLeaderboard = onCall(async (request) => {
     } catch (error) {
         console.error('Error fetching leaderboard:', error);
         throw new HttpsError('internal', 'Failed to fetch leaderboard');
+    }
+});
+
+/**
+ * Recalculate and update community stats
+ * 
+ * This callable function aggregates all user stats and updates communityStats/latest.
+ * Call this after syncing user stats to keep community stats up-to-date.
+ */
+exports.updateCommunityStats = onCall(async (request) => {
+    // Authentication is optional for this function - it's just aggregating public data
+    console.log('📊 Recalculating community stats...');
+
+    try {
+        // Fetch all user stats
+        const snapshot = await db.collection('userStats').get();
+
+        if (snapshot.empty) {
+            console.log('📊 No user stats found, setting defaults');
+            await db.collection('communityStats').doc('latest').set({
+                totalUsers: 0,
+                activeUsers: 0,
+                averageStreak: 0,
+                averageHealthScore: 0,
+                totalDaysSugarFree: 0,
+                topStreak: 0,
+                topHealthScore: 0,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+            return { success: true, totalUsers: 0 };
+        }
+
+        // Calculate aggregated stats
+        let totalStreak = 0;
+        let totalHealthScore = 0;
+        let topStreak = 0;
+        let topHealthScore = 0;
+        let activeCount = 0;
+
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            const streak = data.currentStreak || 0;
+            const healthScore = data.healthScore || 0;
+            const updatedAt = data.updatedAt?.toDate?.();
+
+            totalStreak += streak;
+            totalHealthScore += healthScore;
+
+            if (streak > topStreak) topStreak = streak;
+            if (healthScore > topHealthScore) topHealthScore = healthScore;
+
+            // Count as active if updated in last 7 days
+            if (updatedAt && updatedAt > sevenDaysAgo) {
+                activeCount++;
+            }
+        });
+
+        const totalUsers = snapshot.size;
+        const averageStreak = totalUsers > 0 ? Math.round(totalStreak / totalUsers * 10) / 10 : 0;
+        const averageHealthScore = totalUsers > 0 ? Math.round(totalHealthScore / totalUsers) : 0;
+
+        // Update the communityStats/latest document
+        await db.collection('communityStats').doc('latest').set({
+            totalUsers,
+            activeUsers: activeCount,
+            averageStreak,
+            averageHealthScore,
+            totalDaysSugarFree: totalStreak,
+            topStreak,
+            topHealthScore,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        console.log(`✅ Community stats updated: ${totalUsers} users, ${activeCount} active, avg streak ${averageStreak}`);
+        return { success: true, totalUsers, activeUsers: activeCount };
+    } catch (error) {
+        console.error('❌ Error recalculating community stats:', error);
+        throw new HttpsError('internal', 'Failed to update community stats');
     }
 });
