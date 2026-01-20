@@ -411,6 +411,7 @@ const styles = StyleSheet.create({
     stepTitle: { fontSize: 20, fontWeight: '700', color: looviColors.text.primary, marginBottom: 12 },
     descriptionInput: { backgroundColor: '#F9F9F9', borderRadius: 12, padding: spacing.md, fontSize: 16, minHeight: 80, marginBottom: spacing.xl },
     actionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    ghostButton: { paddingHorizontal: 16, paddingVertical: 10 },
     ghostButtonText: { fontSize: 16, color: looviColors.text.tertiary, fontWeight: '600' },
     primaryButton: { backgroundColor: looviColors.coralOrange, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, flexDirection: 'row', alignItems: 'center' },
     primaryButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700', marginRight: 8 },
