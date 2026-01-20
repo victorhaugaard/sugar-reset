@@ -53,10 +53,10 @@ export function WellnessModal({
     selectedDate,
     existingData
 }: WellnessModalProps) {
-    const [mood, setMood] = useState(3);
-    const [energy, setEnergy] = useState(3);
-    const [focus, setFocus] = useState(3);
-    const [sleepHours, setSleepHours] = useState(7);
+    const [mood, setMood] = useState(0);
+    const [energy, setEnergy] = useState(0);
+    const [focus, setFocus] = useState(0);
+    const [sleepHours, setSleepHours] = useState(0);
     const [thoughts, setThoughts] = useState('');
     const [syncing, setSyncing] = useState(false);
 
@@ -70,10 +70,10 @@ export function WellnessModal({
                 setSleepHours(existingData.sleepHours);
                 setThoughts(existingData.thoughts || '');
             } else {
-                setMood(3);
-                setEnergy(3);
-                setFocus(3);
-                setSleepHours(7);
+                setMood(0);
+                setEnergy(0);
+                setFocus(0);
+                setSleepHours(0);
                 setThoughts('');
             }
         }
@@ -122,12 +122,14 @@ export function WellnessModal({
     ) => (
         <View style={styles.scaleContainer}>
             <View style={styles.sliderHeader}>
-                <View style={[styles.iconContainer, { backgroundColor: `${color}15` }]}>
-                    <Ionicons name={iconName} size={18} color={color} />
+                <View style={[styles.iconContainer, { backgroundColor: value === 0 ? '#F0F0F0' : `${color}15` }]}>
+                    <Ionicons name={iconName} size={18} color={value === 0 ? '#CCC' : color} />
                 </View>
                 <View style={styles.sliderLabelContainer}>
                     <Text style={styles.scaleLabel}>{label}</Text>
-                    <Text style={[styles.scaleValue, { color }]}>{value}/5</Text>
+                    <Text style={[styles.scaleValue, { color: value === 0 ? '#CCC' : color }]}>
+                        {value === 0 ? 'Slide to set' : `${value}/5`}
+                    </Text>
                 </View>
             </View>
             <Slider
@@ -135,11 +137,11 @@ export function WellnessModal({
                 minimumValue={1}
                 maximumValue={5}
                 step={1}
-                value={value}
+                value={value === 0 ? 1 : value}
                 onValueChange={setValue}
-                minimumTrackTintColor={color}
+                minimumTrackTintColor={value === 0 ? '#E0E0E0' : color}
                 maximumTrackTintColor="rgba(0,0,0,0.1)"
-                thumbTintColor={color}
+                thumbTintColor={value === 0 ? '#CCC' : color}
             />
         </View>
     );
@@ -148,22 +150,24 @@ export function WellnessModal({
     const renderSleepSlider = () => (
         <View style={styles.scaleContainer}>
             <View style={styles.sliderHeader}>
-                <View style={[styles.iconContainer, { backgroundColor: `${looviColors.skyBlueDark}15` }]}>
-                    <Ionicons name="bed-outline" size={18} color={looviColors.skyBlueDark} />
+                <View style={[styles.iconContainer, { backgroundColor: sleepHours === 0 ? '#F0F0F0' : `${looviColors.skyBlueDark}15` }]}>
+                    <Ionicons name="bed-outline" size={18} color={sleepHours === 0 ? '#CCC' : looviColors.skyBlueDark} />
                 </View>
                 <View style={styles.sliderLabelContainer}>
                     <Text style={styles.scaleLabel}>Sleep</Text>
-                    <Text style={[styles.scaleValue, { color: looviColors.skyBlueDark }]}>{sleepHours}h</Text>
+                    <Text style={[styles.scaleValue, { color: sleepHours === 0 ? '#CCC' : looviColors.skyBlueDark }]}>
+                        {sleepHours === 0 ? 'Slide to set' : `${sleepHours}h`}
+                    </Text>
                 </View>
                 <TouchableOpacity
                     style={styles.syncButton}
                     onPress={handleSyncSleep}
                     disabled={syncing}
                 >
-                    <Ionicons 
-                        name={syncing ? "hourglass" : "sync"} 
-                        size={14} 
-                        color={looviColors.skyBlueDark} 
+                    <Ionicons
+                        name={syncing ? "hourglass" : "sync"}
+                        size={14}
+                        color={looviColors.skyBlueDark}
                     />
                     <Text style={[styles.syncText, { color: looviColors.skyBlueDark }]}>Sync</Text>
                 </TouchableOpacity>
@@ -173,11 +177,11 @@ export function WellnessModal({
                 minimumValue={4}
                 maximumValue={12}
                 step={1}
-                value={sleepHours}
+                value={sleepHours === 0 ? 7 : sleepHours}
                 onValueChange={setSleepHours}
-                minimumTrackTintColor={looviColors.skyBlueDark}
+                minimumTrackTintColor={sleepHours === 0 ? '#E0E0E0' : looviColors.skyBlueDark}
                 maximumTrackTintColor="rgba(0,0,0,0.1)"
-                thumbTintColor={looviColors.skyBlueDark}
+                thumbTintColor={sleepHours === 0 ? '#CCC' : looviColors.skyBlueDark}
             />
             <View style={styles.scaleLabels}>
                 <Text style={styles.scaleLabelText}>4h</Text>
@@ -285,7 +289,7 @@ export function WellnessModal({
             {Platform.OS === 'ios' && (
                 <InputAccessoryView nativeID={INPUT_ACCESSORY_ID}>
                     <View style={styles.keyboardAccessory}>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.doneButton}
                             onPress={() => Keyboard.dismiss()}
                         >

@@ -19,6 +19,7 @@ import {
     ActivityIndicator,
     Alert,
     RefreshControl,
+    Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -304,7 +305,7 @@ export default function SocialScreen() {
                 ) : (
                     posts.map((post: Post) => (
                         <TouchableOpacity key={post.id} activeOpacity={0.9}>
-                            <GlassCard variant="light" padding="lg" style={styles.postCard}>
+                            <GlassCard padding="lg" style={styles.postCard}>
                                 {/* Post Header */}
                                 <View style={styles.postHeader}>
                                     <View style={styles.authorInfo}>
@@ -503,8 +504,7 @@ export default function SocialScreen() {
                         onPress={handleProfilePress}
                     >
                         {user?.photoURL ? (
-                            // Add image component if available
-                            <View style={styles.profileAvatarPlaceholder} />
+                            <Image source={{ uri: user.photoURL }} style={styles.profileAvatarImage} />
                         ) : (
                             <View style={styles.profileAvatarPlaceholder}>
                                 <Text style={styles.profileInitial}>
@@ -988,5 +988,10 @@ const styles = StyleSheet.create({
     },
     yourRankCard: {
         // specific styles for your rank card if needed
+    },
+    profileAvatarImage: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
     },
 });

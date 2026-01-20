@@ -149,6 +149,10 @@ export default function ProfileScreen() {
                     onPress: async () => {
                         try {
                             await signOut();
+                            navigation.reset({
+                                index: 0,
+                                routes: [{ name: 'Onboarding' }],
+                            });
                         } catch (error) {
                             console.error('Error signing out:', error);
                         }

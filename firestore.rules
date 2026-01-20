@@ -93,29 +93,47 @@ service cloud.firestore {
       // Anyone authenticated can read posts
       allow read: if isAuthenticated();
       
-      // Authenticated users can create posts
+      // Authenticated users can create posts with strict schema validation
       allow create: if isAuthenticated() && 
-        request.resource.data.authorId == request.auth.uid;
+        request.resource.data.authorId == request.auth.uid &&
+        request.resource.data.title is string &&
+        request.resource.data.title.size() > 0 &&
+        request.resource.data.title.size() <= 140 &&
+        request.resource.data.content is string &&
+        request.resource.data.content.size() > 0 &&
+        // Prevent massive spam payloads (limit to ~5KB)
+        request.resource.data.content.size() <= 5000 &&
+        // Verify common fields
+        (!('tags' in request.resource.data) || request.resource.data.tags is list);
       
-      // Only author can update their own post
+      // Only author can update, but cannot change critical fields like authorId
       allow update: if isAuthenticated() && 
-        resource.data.authorId == request.auth.uid;
+        resource.data.authorId == request.auth.uid &&
+        request.resource.data.authorId == request.auth.uid &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt']));
       
       // Only author can delete their own post
       allow delete: if isAuthenticated() && 
         resource.data.authorId == request.auth.uid;
       
       // Votes subcollection
-      match /votes/{oderId} {
+      match /votes/{voteId} {
         allow read: if isAuthenticated();
-        allow write: if isAuthenticated();
+        allow write: if isAuthenticated() && 
+           // User can only modify their own vote document
+           voteId == request.auth.uid;
       }
       
       // Comments subcollection
       match /comments/{commentId} {
         allow read: if isAuthenticated();
+        // Create comment with validation
         allow create: if isAuthenticated() && 
-          request.resource.data.authorId == request.auth.uid;
+          request.resource.data.authorId == request.auth.uid &&
+          request.resource.data.content is string &&
+          request.resource.data.content.size() > 0 &&
+          request.resource.data.content.size() <= 1000;
+          
         allow delete: if isAuthenticated() && 
           resource.data.authorId == request.auth.uid;
       }
@@ -138,9 +156,9 @@ service cloud.firestore {
       // Anyone authenticated can read community-wide stats
       allow read: if isAuthenticated();
       
-      // Allow authenticated users to write (for client-side caching)
-      // In production, this should be Cloud Functions only
-      allow write: if isAuthenticated();
+      // SECURITY: Block all client-side writes to global stats
+      // Updates must be performed by Cloud Functions
+      allow write: if false;
     }
   }
 }
