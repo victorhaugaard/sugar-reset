@@ -57,6 +57,8 @@ import {
     WellnessMetrics as HealthWellnessMetrics,
 } from '../services/healthScoringService';
 
+import { PledgeModal } from '../components/PledgeModal';
+
 function formatDuration(ms: number) {
     const seconds = Math.floor((ms / 1000) % 60);
     const minutes = Math.floor((ms / (1000 * 60)) % 60);
@@ -642,9 +644,7 @@ export default function HomeScreen() {
                                         </View>
                                     );
                                 }}
-                                getItemLayout={(data, index) => (
-                                    { length: 100, offset: 100 * index, index }
-                                )}
+
                                 initialScrollIndex={(() => {
                                     if (!hasPledgedToday) return 0;
                                     const currentHour = new Date().getHours();
@@ -917,196 +917,18 @@ export default function HomeScreen() {
 
 
                     {/* Pledge Modal - Interactive Hold-Down */}
-                    <Modal
+                    {/* Pledge Modal - Interactive Hold-Down */}
+                    <PledgeModal
                         visible={showPledgeModal}
-                        transparent
-                        animationType="fade"
-                        onRequestClose={() => setShowPledgeModal(false)}
-                    >
-                        <View style={styles.modalOverlay}>
-                            {/* Animated shroud that closes in while holding */}
-                            <Animated.View
-                                style={[
-                                    styles.pledgeShroud,
-                                    {
-                                        opacity: pledgeShroudOpacity,
-                                        transform: [{
-                                            scale: pledgeShroudOpacity.interpolate({
-                                                inputRange: [0, 1],
-                                                outputRange: [1.5, 1],
-                                            })
-                                        }]
-                                    }
-                                ]}
-                            />
+                        onClose={() => setShowPledgeModal(false)}
+                        onPledgeComplete={() => {
+                            setHasPledgedToday(true);
+                            // Trigger layout animation for the button change
+                            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                        }}
+                    />
 
-                            {/* Close button */}
-                            <TouchableOpacity
-                                style={styles.pledgeCloseButton}
-                                onPress={() => setShowPledgeModal(false)}
-                                hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-                            >
-                                <Feather name="x" size={24} color="rgba(255, 255, 255, 0.7)" />
-                            </TouchableOpacity>
 
-                            <View style={styles.pledgeModalContent}>
-                                {hasPledgedToday ? (
-                                    <>
-
-                                        <View style={styles.pledgeEmojiContainer}>
-                                            <AppIcon emoji="✅" size={64} />
-                                        </View>
-                                        <Text style={styles.pledgeCompletedText}>Pledge Complete!</Text>
-                                        <Text style={styles.pledgeCompletedSubtext}>Have a great day 🌅</Text>
-                                    </>
-                                ) : (
-                                    <>
-                                        {/* Morning indicator */}
-                                        <View style={styles.morningBadge}>
-                                            <AppIcon emoji="☀️" size={16} />
-                                            <Text style={styles.morningBadgeText}>Morning Ritual</Text>
-                                        </View>
-
-                                        <View style={styles.pledgeEmojiContainer}>
-                                            <AppIcon emoji="✋" size={80} />
-                                        </View>
-
-                                        <Text style={styles.pledgeInstruction}>Hold to pledge</Text>
-
-                                        {/* Hold-down button */}
-                                        <View
-                                            {...PanResponder.create({
-                                                onStartShouldSetPanResponder: () => true,
-                                                onPanResponderGrant: () => {
-                                                    setIsPledgeHolding(true);
-                                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-                                                    // Animate scale
-                                                    Animated.spring(pledgeScale, {
-                                                        toValue: 0.95,
-                                                        useNativeDriver: true,
-                                                    }).start();
-
-                                                    // Animate shroud
-                                                    Animated.timing(pledgeShroudOpacity, {
-                                                        toValue: 1,
-                                                        duration: 1200,
-                                                        useNativeDriver: true,
-                                                    }).start();
-
-                                                    // Progress animation
-                                                    Animated.timing(pledgeProgress, {
-                                                        toValue: 1,
-                                                        duration: 1200,
-                                                        useNativeDriver: false,
-                                                    }).start();
-
-                                                    // Hold timer
-                                                    holdTimerRef.current = setTimeout(() => {
-                                                        // Success haptic
-                                                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-                                                        // Celebration animation
-                                                        Animated.parallel([
-                                                            Animated.spring(celebrationScale, {
-                                                                toValue: 1,
-                                                                friction: 6,
-                                                                tension: 40,
-                                                                useNativeDriver: true,
-                                                            }),
-                                                            Animated.timing(celebrationOpacity, {
-                                                                toValue: 1,
-                                                                duration: 300,
-                                                                useNativeDriver: true,
-                                                            }),
-                                                        ]).start();
-
-                                                        // Mark as pledged
-                                                        setHasPledgedToday(true);
-
-                                                        // Fade out celebration and close
-                                                        setTimeout(() => {
-                                                            Animated.timing(celebrationOpacity, {
-                                                                toValue: 0,
-                                                                duration: 500,
-                                                                useNativeDriver: true,
-                                                            }).start();
-
-                                                            setTimeout(() => {
-                                                                setShowPledgeModal(false);
-                                                                // Reset animations
-                                                                pledgeProgress.setValue(0);
-                                                                pledgeScale.setValue(1);
-                                                                pledgeShroudOpacity.setValue(0);
-                                                                celebrationScale.setValue(0);
-                                                                celebrationOpacity.setValue(0);
-                                                            }, 500);
-                                                        }, 1500);
-                                                    }, 1200);
-                                                },
-                                                onPanResponderRelease: () => {
-                                                    if (holdTimerRef.current) {
-                                                        clearTimeout(holdTimerRef.current);
-                                                    }
-
-                                                    if (isPledgeHolding) {
-                                                        setIsPledgeHolding(false);
-                                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-                                                        // Reset animations
-                                                        Animated.parallel([
-                                                            Animated.spring(pledgeScale, {
-                                                                toValue: 1,
-                                                                useNativeDriver: true,
-                                                            }),
-                                                            Animated.timing(pledgeShroudOpacity, {
-                                                                toValue: 0,
-                                                                duration: 300,
-                                                                useNativeDriver: true,
-                                                            }),
-                                                            Animated.timing(pledgeProgress, {
-                                                                toValue: 0,
-                                                                duration: 300,
-                                                                useNativeDriver: false,
-                                                            }),
-                                                        ]).start();
-                                                    }
-                                                },
-                                            }).panHandlers}
-                                        >
-                                            <Animated.View
-                                                style={[
-                                                    styles.pledgeHoldButton,
-                                                    {
-                                                        transform: [{ scale: pledgeScale }]
-                                                    }
-                                                ]}
-                                            >
-                                                {/* Progress ring */}
-                                                <Animated.View
-                                                    style={[
-                                                        styles.pledgeProgressRing,
-                                                        {
-                                                            opacity: pledgeProgress,
-                                                            transform: [{
-                                                                scale: pledgeProgress.interpolate({
-                                                                    inputRange: [0, 1],
-                                                                    outputRange: [0.8, 1],
-                                                                })
-                                                            }]
-                                                        }
-                                                    ]}
-                                                />
-                                                <View style={styles.pledgeButtonInner}>
-                                                    <AppIcon emoji="✋" size={40} color="#FFFFFF" />
-                                                </View>
-                                            </Animated.View>
-                                        </View>
-                                    </>
-                                )}
-                            </View>
-                        </View>
-                    </Modal>
 
                     {/* Journal Entry Modal */}
                     <JournalEntryModal
@@ -1247,8 +1069,8 @@ export default function HomeScreen() {
                         existingData={todayWellnessData}
                     />
                 </SafeAreaView>
-            </LooviBackground>
-        </SwipeableTabView>
+            </LooviBackground >
+        </SwipeableTabView >
     );
 }
 
