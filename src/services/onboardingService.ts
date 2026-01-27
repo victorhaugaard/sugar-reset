@@ -14,15 +14,20 @@ export interface OnboardingData {
     // Comprehensive Quiz fields
     gender?: 'male' | 'female' | 'other';
     sugarFrequency?: string; // 'rarely', 'weekly', 'daily', 'multiple'
+    consumptionShift?: string;
     dailySugarGrams?: number;
     hardToGoWithout?: number; // 1-4 scale
+    moodDifference?: string;
+    monthlySpending?: string;
+    reasons?: string[];
+    otherReason?: string;
     stressEating?: number; // 1-4 scale
     boredomEating?: number; // 1-4 scale
-    moneySpending?: number; // 1-4 scale
     sugarDependencyScore?: number; // calculated total
     goals?: string[];
     triggers?: string[]; // stress, boredom, tired, emotional, social, reward, habit, menstrual
     nickname?: string;
+    age?: string;
 
     // Plan screen
     plan?: 'cold_turkey' | 'gradual';
