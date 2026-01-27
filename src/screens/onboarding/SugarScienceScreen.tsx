@@ -17,11 +17,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { LinearGradient } from 'expo-linear-gradient';
-import { spacing, borderRadius } from '../../theme';
+import { spacing } from '../../theme';
 import LooviBackground, { looviColors } from '../../components/LooviBackground';
-import { GlassCard } from '../../components/GlassCard';
-import { AnimatedIllustration } from '../../components/AnimatedIllustration';
+import { AnimatedIllustration, IllustrationType } from '../../components/AnimatedIllustration';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -31,78 +29,47 @@ type SugarScienceScreenProps = {
 
 interface ScienceSlide {
     id: string;
-    emoji: string;
+    illustration: IllustrationType;
     title: string;
-    subtitle: string;
-    facts: string[];
-    source?: string;
+    body: string;
+    backgroundColor: 'crimson' | 'navy';
 }
 
 const scienceSlides: ScienceSlide[] = [
     {
         id: '1',
-        emoji: '📈',
-        title: 'Blood Sugar Spikes',
-        subtitle: 'The hidden damage',
-        facts: [
-            'Sugar causes rapid glucose spikes that stress your pancreas',
-            'Repeated spikes lead to insulin resistance over time',
-            'This is the pathway to Type 2 diabetes',
-            'Even "healthy" people suffer energy crashes daily',
-        ],
-        source: 'Harvard Medical School',
+        illustration: 'blood_sugar',
+        title: 'Sugar is a Rollercoaster',
+        body: "Every spike is a debt your body can't pay. It creates a cycle of **fake energy**, **brutal crashes**, and **ruined sleep** that leaves you permanently exhausted.",
+        backgroundColor: 'crimson',
     },
     {
         id: '2',
-        emoji: '🧠',
-        title: 'Brain & Mental Health',
-        subtitle: 'Sugar affects your mind',
-        facts: [
-            'Sugar triggers the same dopamine pathways as addictive drugs',
-            'High sugar intake linked to 23% higher depression risk',
-            'Causes brain fog, poor concentration, and memory issues',
-            'Accelerates cognitive decline as you age',
-        ],
-        source: 'American Journal of Clinical Nutrition',
+        illustration: 'brain',
+        title: 'Sugar Hijacks Your Brain',
+        body: "Sugar triggers the **same dopamine pathways** as addictive drugs. It's a chemical hook that increases your risk of **depression by 23%** and clouds your mind with brain fog.",
+        backgroundColor: 'crimson',
     },
     {
         id: '3',
-        emoji: '💔',
-        title: 'Heart & Inflammation',
-        subtitle: 'Silent damage inside',
-        facts: [
-            'Sugar causes chronic inflammation throughout your body',
-            'Doubles the risk of heart disease when consumed daily',
-            'Raises triglycerides and lowers "good" HDL cholesterol',
-            'Damages blood vessel walls over time',
-        ],
-        source: 'Journal of the American Heart Association',
+        illustration: 'heart_health',
+        title: 'The Silent Destroyer',
+        body: "Sugar sets your body on fire. It fuels **chronic inflammation**, doubles the risk of **heart disease**, and provides the glucose that **cancer cells** crave to grow.",
+        backgroundColor: 'crimson',
     },
     {
         id: '4',
-        emoji: '🎗️',
-        title: 'Cancer Risk',
-        subtitle: 'The uncomfortable truth',
-        facts: [
-            'Cancer cells consume 200x more glucose than normal cells',
-            'High sugar diets linked to increased cancer risk',
-            'Obesity (driven by sugar) is a major cancer risk factor',
-            'Cutting sugar may slow tumor growth',
-        ],
-        source: 'Cancer Research UK',
+        illustration: 'cancer_awareness',
+        title: 'The Aging Accelerator',
+        body: "Sugar literally 'caramelizes' your cells through glycation. It destroys **collagen and elastin**, leading to **premature wrinkles**, sagging skin, and faster cellular aging.",
+        backgroundColor: 'crimson',
     },
     {
         id: '5',
-        emoji: '😴',
-        title: 'Energy & Sleep',
-        subtitle: 'The exhaustion cycle',
-        facts: [
-            'Sugar provides fake energy followed by crashes',
-            'Disrupts deep sleep and recovery cycles',
-            'Creates dependency: you need more to feel "normal"',
-            'Breaking free restores natural, stable energy',
-        ],
-        source: 'Sleep Foundation',
+        illustration: 'target_goals',
+        title: 'The Path to Freedom',
+        body: "You are more than your cravings. By **breaking the sugar cycle**, your brain restores its **natural dopamine balance** and your body begins to **heal from the inside out**. It's time to trade the crashes for **stable moods, deep sleep, and your natural, vibrant glow**.",
+        backgroundColor: 'navy',
     },
 ];
 
@@ -129,52 +96,53 @@ export default function SugarScienceScreen({ navigation }: SugarScienceScreenPro
         }
     }).current;
 
+    // Helper function to render body text with bold formatting
+    const renderBodyText = (text: string) => {
+        const parts = text.split(/(\*\*.*?\*\*)/g);
+        return (
+            <Text style={styles.bodyText}>
+                {parts.map((part, index) => {
+                    if (part.startsWith('**') && part.endsWith('**')) {
+                        const boldText = part.slice(2, -2);
+                        return (
+                            <Text key={index} style={styles.bodyTextBold}>
+                                {boldText}
+                            </Text>
+                        );
+                    }
+                    return part;
+                })}
+            </Text>
+        );
+    };
+
     const renderSlide = ({ item }: { item: ScienceSlide }) => (
         <View style={styles.slide}>
             <View style={styles.slideContent}>
                 <AnimatedIllustration
-                    name={item.emoji}
-                    size={120}
+                    name={item.illustration}
+                    size={160}
                     animation="breathe"
                 />
                 <Text style={styles.title}>{item.title}</Text>
-                <Text style={styles.subtitle}>{item.subtitle}</Text>
-
-                <GlassCard variant="light" padding="lg" style={styles.factsCard}>
-                    {item.facts.map((fact, index) => (
-                        <View key={index} style={styles.factRow}>
-                            <Text style={styles.factBullet}>⚠️</Text>
-                            <Text style={styles.factText}>{fact}</Text>
-                        </View>
-                    ))}
-                    {item.source && (
-                        <Text style={styles.source}>Source: {item.source}</Text>
-                    )}
-                </GlassCard>
+                <View style={styles.spacer} />
+                {renderBodyText(item.body)}
             </View>
         </View>
     );
 
     const isLastSlide = currentIndex === scienceSlides.length - 1;
+    
+    // Determine background variant based on current slide
+    const currentSlide = scienceSlides[currentIndex];
+    const backgroundVariant = currentSlide?.backgroundColor === 'navy' ? 'solidNavy' : 'solidCrimson';
 
     return (
-        <LooviBackground variant="coralTop">
-            {/* Strong Red/Warning Overlay */}
-            <LinearGradient
-                colors={[
-                    'rgba(198, 40, 40, 0.15)',
-                    'rgba(198, 40, 40, 0.08)',
-                    'rgba(198, 40, 40, 0.12)',
-                ]}
-                style={StyleSheet.absoluteFill}
-                pointerEvents="none"
-            />
+        <LooviBackground variant={backgroundVariant}>
             <SafeAreaView style={styles.container}>
                 {/* Header with title */}
                 <View style={styles.header}>
-                    <View style={styles.headerBadge}>
-                        <Text style={styles.headerBadgeText}>⚠️ Learn About Sugar</Text>
-                    </View>
+                    <Text style={styles.headerTitle}>Learn About Sugar</Text>
                     <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
                         <Text style={styles.skipText}>Skip</Text>
                     </TouchableOpacity>
@@ -252,16 +220,13 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.screen.horizontal,
         paddingTop: spacing.sm,
     },
-    headerBadge: {
-        backgroundColor: 'rgba(198, 40, 40, 0.18)',
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.xs,
-        borderRadius: 20,
-    },
-    headerBadgeText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#B71C1C',
+    headerTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: '#FFFFFF',
+        textShadowColor: 'rgba(0, 0, 0, 0.3)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
     },
     skipButton: {
         paddingVertical: spacing.sm,
@@ -269,64 +234,48 @@ const styles = StyleSheet.create({
     },
     skipText: {
         fontSize: 15,
-        fontWeight: '500',
-        color: looviColors.text.tertiary,
+        fontWeight: '700',
+        color: '#FFFFFF',
+        textShadowColor: 'rgba(0, 0, 0, 0.3)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
     },
     slide: {
         width: SCREEN_WIDTH,
-        paddingHorizontal: spacing.screen.horizontal,
     },
     slideContent: {
         flex: 1,
         alignItems: 'center',
+        justifyContent: 'center',
         paddingTop: spacing.xl,
-    },
-    emoji: {
-        fontSize: 56,
-        marginBottom: spacing.md,
+        paddingHorizontal: spacing.screen.horizontal,
     },
     title: {
-        fontSize: 28,
-        fontWeight: '700',
-        color: looviColors.text.primary,
+        fontSize: 34,
+        fontWeight: '800',
+        color: '#FFFFFF',
         textAlign: 'center',
         letterSpacing: -0.5,
-        marginBottom: spacing.xs,
+        textShadowColor: 'rgba(0, 0, 0, 0.3)',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 4,
     },
-    subtitle: {
-        fontSize: 16,
+    spacer: {
+        height: 36,
+    },
+    bodyText: {
+        fontSize: 18,
         fontWeight: '400',
-        color: looviColors.text.secondary,
+        color: '#FFFFFF',
         textAlign: 'center',
-        marginBottom: spacing.xl,
+        lineHeight: 28,
+        paddingHorizontal: spacing.md,
+        textShadowColor: 'rgba(0, 0, 0, 0.3)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
     },
-    factsCard: {
-        width: '100%',
-    },
-    factRow: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        marginBottom: spacing.md,
-    },
-    factBullet: {
-        fontSize: 14,
-        marginRight: spacing.sm,
-        marginTop: 2,
-    },
-    factText: {
-        fontSize: 15,
-        fontWeight: '400',
-        color: looviColors.text.secondary,
-        flex: 1,
-        lineHeight: 22,
-    },
-    source: {
-        fontSize: 12,
-        fontWeight: '400',
-        color: looviColors.text.tertiary,
-        fontStyle: 'italic',
-        marginTop: spacing.sm,
-        textAlign: 'center',
+    bodyTextBold: {
+        fontWeight: '700',
     },
     pagination: {
         flexDirection: 'row',
@@ -338,18 +287,18 @@ const styles = StyleSheet.create({
     dot: {
         height: 8,
         borderRadius: 4,
-        backgroundColor: '#C62828',
+        backgroundColor: '#FFFFFF',
     },
     bottomContainer: {
         paddingHorizontal: spacing.screen.horizontal,
         paddingBottom: spacing['2xl'],
     },
     nextButton: {
-        backgroundColor: looviColors.accent.primary,
+        backgroundColor: '#FFFFFF',
         paddingVertical: 18,
         borderRadius: 30,
         alignItems: 'center',
-        shadowColor: looviColors.accent.primary,
+        shadowColor: '#000000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 12,
@@ -357,7 +306,7 @@ const styles = StyleSheet.create({
     },
     nextButtonText: {
         fontSize: 17,
-        fontWeight: '600',
-        color: '#FFFFFF',
+        fontWeight: '700',
+        color: '#1A1A1A',
     },
 });

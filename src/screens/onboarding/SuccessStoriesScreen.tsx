@@ -1,14 +1,13 @@
 /**
  * SuccessStoriesScreen
  * 
- * Social proof screen showing:
- * - User success statistics with animated numbers
- * - Testimonial cards from real users
- * - App store rating
- * - "Tweet" style cards about sugar dangers
+ * Expert quotes and professional insights showing:
+ * - High-authority expert quote cards
+ * - Scientific backing for quitting sugar
+ * - Professional credentials and verified sources
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -16,84 +15,70 @@ import {
     TouchableOpacity,
     ScrollView,
     Animated,
-    Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { spacing, borderRadius } from '../../theme';
+import { spacing } from '../../theme';
 import LooviBackground, { looviColors } from '../../components/LooviBackground';
 import { GlassCard } from '../../components/GlassCard';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type SuccessStoriesScreenProps = {
     navigation: NativeStackNavigationProp<any, 'SuccessStories'>;
 };
 
-interface Testimonial {
+interface ExpertQuote {
     id: string;
     name: string;
     avatar: string;
-    days: number;
+    title: string;
+    headline: string;
     quote: string;
 }
 
-interface SugarFact {
-    id: string;
-    source: string;
-    handle: string;
-    text: string;
-    likes: string;
-}
-
-const TESTIMONIALS: Testimonial[] = [
+const EXPERT_QUOTES: ExpertQuote[] = [
     {
         id: '1',
-        name: 'Sarah M.',
-        avatar: '👩‍💼',
-        days: 47,
-        quote: 'I never thought I could go a week without sugar. Now I\'m at 47 days and counting!',
+        name: 'Andrew Huberman, Ph.D.',
+        avatar: '👨‍🔬',
+        title: 'Neuroscientist & Stanford Professor',
+        headline: 'Reset your dopamine balance.',
+        quote: 'Quitting sugar is less about willpower and more about reclaiming your brain\'s chemistry. Resetting your dopamine balance can dramatically improve motivation and everyday pleasure.',
     },
     {
         id: '2',
-        name: 'James K.',
-        avatar: '👨‍🔬',
-        days: 90,
-        quote: 'The science-based approach finally made it click. My energy levels are incredible.',
+        name: 'Steven Bartlett',
+        avatar: '🎙️',
+        title: 'Host of \'The Diary of a CEO\'',
+        headline: 'Reclaim your mental sovereignty.',
+        quote: 'If you depend on anything, it\'s bad. Ultra-processed foods are poison. When you quit, you break the cycle of consumption and misery and reclaim your control.',
     },
     {
         id: '3',
-        name: 'Emma L.',
-        avatar: '👩‍🎨',
-        days: 21,
-        quote: 'The craving support feature saved me so many times in the first two weeks.',
-    },
-];
-
-const SUGAR_FACTS: SugarFact[] = [
-    {
-        id: '1',
-        source: 'Harvard Health',
-        handle: '@HarvardHealth',
-        text: 'Sugar activates the same brain reward centers as addictive drugs, triggering dopamine release.',
-        likes: '12.4K',
+        name: 'Dr. Mark Hyman',
+        avatar: '⚕️',
+        title: 'Functional Medicine Physician',
+        headline: 'Stop the biological hijacking.',
+        quote: 'Our hormones and brain chemistry are hijacked by sugar. Not metaphorically, but biologically. Quitting sugar is the fastest way to rapidly improve your health.',
     },
     {
-        id: '2',
-        source: 'WHO',
-        handle: '@WHO',
-        text: 'Reducing sugar intake to less than 10% of daily calories can prevent obesity, diabetes, and heart disease.',
-        likes: '8.7K',
+        id: '4',
+        name: 'Jessie Inchauspé',
+        avatar: '🔬',
+        title: 'The Glucose Goddess & Biochemist',
+        headline: 'Slow down the aging process.',
+        quote: 'Fructose molecules glycate things 10 times as fast as glucose. Since aging is essentially \'browning\' from the inside, reducing sugar leads to a longer, more vibrant life.',
+    },
+    {
+        id: '5',
+        name: 'Dr. Robert Lustig',
+        avatar: '👨‍⚕️',
+        title: 'Pediatric Endocrinologist',
+        headline: 'Neutralize the chronic toxin.',
+        quote: 'Sugar is a chronic toxin that kills you slowly by promoting chronic disease, regardless of your weight. Quitting is the only way to stop the metabolic damage.',
     },
 ];
 
 export default function SuccessStoriesScreen({ navigation }: SuccessStoriesScreenProps) {
-    const [animatedValues] = useState({
-        successRate: new Animated.Value(0),
-        avgDays: new Animated.Value(0),
-        users: new Animated.Value(0),
-    });
-
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -111,25 +96,6 @@ export default function SuccessStoriesScreen({ navigation }: SuccessStoriesScree
                 useNativeDriver: true,
             }),
         ]).start();
-
-        // Animate numbers
-        Animated.parallel([
-            Animated.timing(animatedValues.successRate, {
-                toValue: 87,
-                duration: 1500,
-                useNativeDriver: false,
-            }),
-            Animated.timing(animatedValues.avgDays, {
-                toValue: 47,
-                duration: 1500,
-                useNativeDriver: false,
-            }),
-            Animated.timing(animatedValues.users, {
-                toValue: 10,
-                duration: 1500,
-                useNativeDriver: false,
-            }),
-        ]).start();
     }, []);
 
     const handleContinue = () => {
@@ -137,7 +103,7 @@ export default function SuccessStoriesScreen({ navigation }: SuccessStoriesScree
     };
 
     return (
-        <LooviBackground variant="blueBottom">
+        <LooviBackground variant="subtle">
             <SafeAreaView style={styles.container}>
                 <ScrollView
                     style={styles.scrollView}
@@ -147,7 +113,7 @@ export default function SuccessStoriesScreen({ navigation }: SuccessStoriesScree
                     {/* Header */}
                     <View style={styles.header}>
                         <Text style={styles.headerTitle}>Real Results</Text>
-                        <Text style={styles.headerSubtitle}>From people just like you</Text>
+                        <Text style={styles.headerSubtitle}>Explained By Experts and Professionals</Text>
                     </View>
 
                     <Animated.View
@@ -156,96 +122,33 @@ export default function SuccessStoriesScreen({ navigation }: SuccessStoriesScree
                             transform: [{ translateY: slideAnim }],
                         }}
                     >
-                        {/* Statistics Cards */}
-                        <View style={styles.statsRow}>
-                            <GlassCard variant="light" padding="md" style={styles.statCard}>
-                                <AnimatedNumber
-                                    value={animatedValues.successRate}
-                                    suffix="%"
-                                />
-                                <Text style={styles.statLabel}>Success Rate</Text>
-                            </GlassCard>
-                            <GlassCard variant="light" padding="md" style={styles.statCard}>
-                                <AnimatedNumber
-                                    value={animatedValues.avgDays}
-                                    suffix=" days"
-                                />
-                                <Text style={styles.statLabel}>Avg. Streak</Text>
-                            </GlassCard>
-                            <GlassCard variant="light" padding="md" style={styles.statCard}>
-                                <AnimatedNumber
-                                    value={animatedValues.users}
-                                    suffix="K+"
-                                />
-                                <Text style={styles.statLabel}>Users</Text>
-                            </GlassCard>
-                        </View>
-
-                        {/* App Rating */}
-                        <GlassCard variant="light" padding="lg" style={styles.ratingCard}>
-                            <View style={styles.ratingRow}>
-                                <Text style={styles.ratingStars}>⭐⭐⭐⭐⭐</Text>
-                                <Text style={styles.ratingValue}>4.8</Text>
-                            </View>
-                            <Text style={styles.ratingSubtext}>from 2,400+ reviews</Text>
-                        </GlassCard>
-
-                        {/* Testimonials */}
-                        <Text style={styles.sectionTitle}>Success Stories</Text>
-                        <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={styles.testimonialsContainer}
-                        >
-                            {TESTIMONIALS.map((testimonial) => (
-                                <GlassCard
-                                    key={testimonial.id}
-                                    variant="light"
-                                    padding="lg"
-                                    style={styles.testimonialCard}
-                                >
-                                    <View style={styles.testimonialHeader}>
-                                        <Text style={styles.testimonialAvatar}>
-                                            {testimonial.avatar}
-                                        </Text>
-                                        <View>
-                                            <Text style={styles.testimonialName}>
-                                                {testimonial.name}
-                                            </Text>
-                                            <Text style={styles.testimonialDays}>
-                                                🔥 {testimonial.days} days sugar-free
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    <Text style={styles.testimonialQuote}>
-                                        "{testimonial.quote}"
-                                    </Text>
-                                </GlassCard>
-                            ))}
-                        </ScrollView>
-
-                        {/* Sugar Facts */}
-                        <Text style={styles.sectionTitle}>The Sugar Truth</Text>
-                        {SUGAR_FACTS.map((fact) => (
+                        {/* Expert Quote Cards */}
+                        {EXPERT_QUOTES.map((expert) => (
                             <GlassCard
-                                key={fact.id}
+                                key={expert.id}
                                 variant="light"
                                 padding="lg"
-                                style={styles.factCard}
+                                style={styles.expertCard}
                             >
-                                <View style={styles.factHeader}>
-                                    <View style={styles.factSource}>
-                                        <Text style={styles.factIcon}>🔬</Text>
-                                        <View>
-                                            <Text style={styles.factName}>{fact.source}</Text>
-                                            <Text style={styles.factHandle}>{fact.handle}</Text>
+                                {/* Expert Header */}
+                                <View style={styles.expertHeader}>
+                                    <Text style={styles.expertAvatar}>{expert.avatar}</Text>
+                                    <View style={styles.expertInfo}>
+                                        <View style={styles.expertNameRow}>
+                                            <Text style={styles.expertName}>{expert.name}</Text>
+                                            <View style={styles.verifiedBadge}>
+                                                <Text style={styles.verifiedIcon}>✓</Text>
+                                            </View>
                                         </View>
+                                        <Text style={styles.expertTitle}>{expert.title}</Text>
                                     </View>
                                 </View>
-                                <Text style={styles.factText}>{fact.text}</Text>
-                                <View style={styles.factFooter}>
-                                    <Text style={styles.factLikes}>❤️ {fact.likes}</Text>
-                                </View>
+
+                                {/* Headline */}
+                                <Text style={styles.expertHeadline}>{expert.headline}</Text>
+
+                                {/* Quote */}
+                                <Text style={styles.expertQuote}>"{expert.quote}"</Text>
                             </GlassCard>
                         ))}
                     </Animated.View>
@@ -268,24 +171,6 @@ export default function SuccessStoriesScreen({ navigation }: SuccessStoriesScree
     );
 }
 
-// Animated number component
-function AnimatedNumber({ value, suffix }: { value: Animated.Value; suffix: string }) {
-    const [displayValue, setDisplayValue] = useState(0);
-
-    useEffect(() => {
-        const listener = value.addListener(({ value: v }) => {
-            setDisplayValue(Math.round(v));
-        });
-        return () => value.removeListener(listener);
-    }, [value]);
-
-    return (
-        <Text style={styles.statValue}>
-            {displayValue}{suffix}
-        </Text>
-    );
-}
-
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -303,144 +188,78 @@ const styles = StyleSheet.create({
         marginBottom: spacing.xl,
     },
     headerTitle: {
-        fontSize: 28,
+        fontSize: 32,
         fontWeight: '700',
         color: looviColors.text.primary,
         marginBottom: spacing.xs,
+        letterSpacing: -0.5,
     },
     headerSubtitle: {
-        fontSize: 16,
+        fontSize: 17,
         fontWeight: '400',
         color: looviColors.text.secondary,
     },
-    statsRow: {
-        flexDirection: 'row',
-        paddingHorizontal: spacing.screen.horizontal,
-        gap: spacing.sm,
+    expertCard: {
+        marginHorizontal: spacing.screen.horizontal,
         marginBottom: spacing.lg,
     },
-    statCard: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    statValue: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: looviColors.accent.primary,
-    },
-    statLabel: {
-        fontSize: 11,
-        fontWeight: '500',
-        color: looviColors.text.tertiary,
-        marginTop: spacing.xs,
-    },
-    ratingCard: {
-        marginHorizontal: spacing.screen.horizontal,
-        alignItems: 'center',
-        marginBottom: spacing.xl,
-    },
-    ratingRow: {
+    expertHeader: {
         flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.sm,
-    },
-    ratingStars: {
-        fontSize: 18,
-    },
-    ratingValue: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-    },
-    ratingSubtext: {
-        fontSize: 13,
-        fontWeight: '400',
-        color: looviColors.text.tertiary,
-        marginTop: spacing.xs,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-        paddingHorizontal: spacing.screen.horizontal,
-        marginBottom: spacing.md,
-        marginTop: spacing.md,
-    },
-    testimonialsContainer: {
-        paddingHorizontal: spacing.screen.horizontal,
+        alignItems: 'flex-start',
         gap: spacing.md,
-        paddingBottom: spacing.sm,
-    },
-    testimonialCard: {
-        width: SCREEN_WIDTH * 0.75,
-    },
-    testimonialHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.sm,
         marginBottom: spacing.md,
     },
-    testimonialAvatar: {
-        fontSize: 36,
+    expertAvatar: {
+        fontSize: 48,
+        marginTop: 4,
     },
-    testimonialName: {
-        fontSize: 15,
-        fontWeight: '600',
+    expertInfo: {
+        flex: 1,
+    },
+    expertNameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+        marginBottom: 4,
+    },
+    expertName: {
+        fontSize: 17,
+        fontWeight: '700',
         color: looviColors.text.primary,
+        flexShrink: 1,
     },
-    testimonialDays: {
+    verifiedBadge: {
+        backgroundColor: looviColors.accent.primary,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    verifiedIcon: {
         fontSize: 12,
-        fontWeight: '500',
-        color: looviColors.accent.success,
+        fontWeight: '700',
+        color: '#FFFFFF',
     },
-    testimonialQuote: {
+    expertTitle: {
         fontSize: 14,
         fontWeight: '400',
         color: looviColors.text.secondary,
-        fontStyle: 'italic',
-        lineHeight: 22,
+        lineHeight: 18,
     },
-    factCard: {
-        marginHorizontal: spacing.screen.horizontal,
-        marginBottom: spacing.md,
-    },
-    factHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: spacing.sm,
-    },
-    factSource: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.sm,
-    },
-    factIcon: {
-        fontSize: 32,
-    },
-    factName: {
-        fontSize: 14,
+    expertHeadline: {
+        fontSize: 19,
         fontWeight: '700',
         color: looviColors.text.primary,
+        marginBottom: spacing.sm,
+        lineHeight: 26,
     },
-    factHandle: {
-        fontSize: 12,
-        fontWeight: '400',
-        color: looviColors.text.tertiary,
-    },
-    factText: {
+    expertQuote: {
         fontSize: 15,
         fontWeight: '400',
-        color: looviColors.text.primary,
-        lineHeight: 23,
-    },
-    factFooter: {
-        marginTop: spacing.md,
-    },
-    factLikes: {
-        fontSize: 13,
-        fontWeight: '500',
-        color: looviColors.text.tertiary,
+        color: looviColors.text.secondary,
+        lineHeight: 24,
+        fontStyle: 'italic',
     },
     footer: {
         position: 'absolute',

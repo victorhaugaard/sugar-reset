@@ -162,7 +162,9 @@ export type BackgroundVariant =
     | 'coralDominant'   // Large coral presence
     | 'blueDominant'   // Large blue presence
     | 'blueRight'      // Blue on right side
-    | 'coralRight';    // Coral on right side
+    | 'coralRight'     // Coral on right side
+    | 'solidCrimson'   // Solid #B22222 (Deep Crimson) - for high-impact danger slides
+    | 'solidNavy';     // Solid #1A237E (Deep Navy) - for recovery/hope slides
 
 interface LooviBackgroundProps {
     children?: React.ReactNode;
@@ -527,6 +529,18 @@ export default function LooviBackground({
                             style={styles.gradient}
                         />
                     </>
+                );
+
+            case 'solidCrimson':
+                // Solid Deep Crimson background (#B22222) for high-impact danger slides
+                return (
+                    <View style={[styles.gradient, { backgroundColor: '#B22222' }]} />
+                );
+
+            case 'solidNavy':
+                // Solid Deep Navy background (#1A237E) for recovery/hope slides
+                return (
+                    <View style={[styles.gradient, { backgroundColor: '#1A237E' }]} />
                 );
 
             default:

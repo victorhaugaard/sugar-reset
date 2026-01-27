@@ -424,7 +424,7 @@ export default function ComprehensiveQuizScreen({ navigation, route }: Comprehen
         const rawPercentage = Math.round((totalScore / maxScore) * 100);
 
         // Determine dependency level
-        let dependencyLevel = 'Significant';
+        let dependencyLevel = 'Active';
         if (rawPercentage >= 60) {
             dependencyLevel = 'High';
         } else if (rawPercentage < 35) {
