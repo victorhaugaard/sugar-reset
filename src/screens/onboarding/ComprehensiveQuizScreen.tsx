@@ -5,7 +5,7 @@
  * sugar habits and personalize the user experience.
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -28,10 +28,15 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type ComprehensiveQuizScreenProps = {
     navigation: NativeStackNavigationProp<any, 'ComprehensiveQuiz'>;
+    route: {
+        params?: {
+            skip?: boolean;
+        };
+    };
 };
 
 // Question types
-type QuestionType = 'single' | 'scale' | 'multi' | 'slider' | 'text' | 'triggers';
+type QuestionType = 'single' | 'scale' | 'multi' | 'slider' | 'text' | 'triggers' | 'userInfo';
 
 interface QuestionOption {
     id: string;
@@ -39,6 +44,7 @@ interface QuestionOption {
     label: string;
     description?: string;
     femaleOnly?: boolean;
+    isOther?: boolean;
 }
 
 interface Question {
@@ -87,23 +93,14 @@ const getQuestions = (gender: string | null): Question[] => {
             ],
         },
         {
-            id: 'intake',
-            type: 'slider',
-            emoji: '📊',
-            title: 'Estimate your daily sugar intake',
-            subtitle: 'Use the examples below to help estimate',
-            helpText: '💡 Examples: 1 can of soda = 39g, 1 donut = 15g, 1 chocolate bar = 25g, sweetened coffee = 20g',
-            sliderConfig: {
-                min: 0,
-                max: 150,
-                step: 5,
-                unit: 'g',
-                references: [
-                    { value: 25, label: 'WHO max (women)' },
-                    { value: 36, label: 'WHO max (men)' },
-                    { value: 77, label: 'US average' },
-                ],
-            },
+            id: 'consumptionShift',
+            type: 'single',
+            emoji: '📈',
+            title: 'Have you noticed a shift towards a higher or more frequent consumption of sugar?',
+            options: [
+                { id: 'yes', emoji: '📈', label: 'Yes' },
+                { id: 'no', emoji: '📉', label: 'No' },
+            ],
         },
         {
             id: 'hardToGoWithout',
@@ -135,30 +132,58 @@ const getQuestions = (gender: string | null): Question[] => {
             ],
         },
         {
-            id: 'dailySpending',
-            type: 'scale',
-            emoji: '💵',
-            title: 'How much do you spend on sugary items daily?',
+            id: 'moodDifference',
+            type: 'single',
+            emoji: '🎭',
+            title: 'Do you notice differences in your mood when you consume a lot of sugar, or when you’ve had no sugar at all?',
             options: [
-                { id: '0', emoji: '💚', label: '$0 - $1', description: 'Minimal spending' },
-                { id: '300', emoji: '💛', label: '$1 - $5', description: 'Some treats' },
-                { id: '700', emoji: '🧡', label: '$5 - $10', description: 'Regular spending' },
-                { id: '1500', emoji: '❤️', label: '$10+', description: 'Significant spending' },
+                { id: 'yes', emoji: '🎭', label: 'Yes' },
+                { id: 'alittle', emoji: '🤔', label: 'A little' },
+                { id: 'no', emoji: '😐', label: 'No' },
             ],
         },
         {
-            id: 'nickname',
-            type: 'text',
-            emoji: '👋',
-            title: 'What should we call you?',
-            subtitle: 'Your name or nickname',
+            id: 'monthlySpending',
+            type: 'single',
+            emoji: '💵',
+            title: 'How much do you spend on sugary products each month?',
+            options: [
+                { id: '0-10', emoji: '💚', label: '0 - $10 per month' },
+                { id: '20-30', emoji: '💛', label: '$20 - $30 per month' },
+                { id: '30-60', emoji: '🧡', label: '$30 - $60 per month' },
+                { id: '60-100', emoji: '❤️', label: '$60 - $100 per month' },
+                { id: '100+', emoji: '💔', label: '$100+ per month' },
+            ],
+        },
+        {
+            id: 'reasons',
+            type: 'triggers', // Using triggers type for multi-select
+            emoji: '🎯',
+            title: 'What are your primary reasons to reduce your sugar intake?',
+            subtitle: 'Select all that apply',
+            options: [
+                { id: 'dependence', emoji: '⛓️', label: 'Reducing sugar dependence' },
+                { id: 'weight', emoji: '⚖️', label: 'Supporting weight loss' },
+                { id: 'health', emoji: '🏥', label: 'Improving overall health' },
+                { id: 'balance', emoji: '🧠', label: 'Mental and emotional balance' },
+                { id: 'beauty', emoji: '✨', label: 'Healthier skin and hair' },
+                { id: 'energy', emoji: '⚡', label: 'Sustained daily energy' },
+                { id: 'other', emoji: '📝', label: 'Other: specify', isOther: true },
+            ],
+        },
+        {
+            id: 'userInfo',
+            type: 'userInfo',
+            emoji: '👤',
+            title: 'A little more about you',
+            subtitle: 'This helps us calculate your plan accurately',
         },
     ];
 
     return baseQuestions;
 };
 
-export default function ComprehensiveQuizScreen({ navigation }: ComprehensiveQuizScreenProps) {
+export default function ComprehensiveQuizScreen({ navigation, route }: ComprehensiveQuizScreenProps) {
     const { updateOnboardingData } = useUserData();
     const [currentQuestion, setCurrentQuestion] = useState(0);
     const [showResult, setShowResult] = useState(false);
@@ -167,18 +192,34 @@ export default function ComprehensiveQuizScreen({ navigation }: ComprehensiveQui
     const [answers, setAnswers] = useState<Record<string, any>>({
         gender: null,
         frequency: null,
-        intake: 50,
+        consumptionShift: null,
         hardToGoWithout: null,
         triggers: [],
-        moneySpending: null,
-        goals: [],
+        intake: 50,
+        moodDifference: null,
+        monthlySpending: null,
+        reasons: [],
+        otherReason: '',
         nickname: '',
+        age: '',
     });
 
     const fadeAnim = useRef(new Animated.Value(1)).current;
     const slideAnim = useRef(new Animated.Value(0)).current;
     const resultFade = useRef(new Animated.Value(0)).current;
     const resultScale = useRef(new Animated.Value(0.8)).current;
+
+    // Handle skip from params
+    useEffect(() => {
+        if (route.params?.skip) {
+            // Find the index of Question 9 (userInfo)
+            const QUESTIONS = getQuestions(answers.gender);
+            const userInfoIndex = QUESTIONS.findIndex(q => q.id === 'userInfo');
+            if (userInfoIndex !== -1) {
+                setCurrentQuestion(userInfoIndex);
+            }
+        }
+    }, [route.params?.skip]);
 
     const QUESTIONS = getQuestions(answers.gender);
     const question = QUESTIONS[currentQuestion];
@@ -203,7 +244,7 @@ export default function ComprehensiveQuizScreen({ navigation }: ComprehensiveQui
         setTimeout(() => goNext(), 300);
     };
 
-    const handleMultiSelect = (optionId: string, fieldId: string = 'goals') => {
+    const handleMultiSelect = (optionId: string, fieldId: string) => {
         setAnswers(prev => {
             const current = prev[fieldId] || [];
             if (current.includes(optionId)) {
@@ -213,18 +254,31 @@ export default function ComprehensiveQuizScreen({ navigation }: ComprehensiveQui
         });
     };
 
+    const handleOtherReasonChange = (text: string) => {
+        setAnswers(prev => ({ ...prev, otherReason: text }));
+    };
+
+    const handleUserInfoChange = (field: 'nickname' | 'age', text: string) => {
+        setAnswers(prev => ({ ...prev, [field]: text }));
+    };
+
     const handleSliderChange = (value: number) => {
         setAnswers(prev => ({ ...prev, intake: Math.round(value) }));
     };
 
-    const handleTextChange = (text: string) => {
-        setAnswers(prev => ({ ...prev, nickname: text }));
-    };
-
     const canProceed = () => {
         const answer = answers[question.id];
+        if (question.type === 'userInfo') {
+            return answers.nickname.trim().length > 0 && answers.age.trim().length > 0;
+        }
         if (question.type === 'text') return answer && answer.trim().length > 0;
-        if (question.type === 'multi' || question.type === 'triggers') return answer && answer.length > 0;
+        if (question.type === 'multi' || question.type === 'triggers') {
+            const hasSelection = answer && answer.length > 0;
+            if (answer?.includes('other')) {
+                return hasSelection && answers.otherReason.trim().length > 0;
+            }
+            return hasSelection;
+        }
         if (question.type === 'slider') return true;
         return answer !== null;
     };
@@ -243,20 +297,37 @@ export default function ComprehensiveQuizScreen({ navigation }: ComprehensiveQui
         // Calculate sugar dependency score
         const frequencyMap: Record<string, number> = { rarely: 1, weekly: 2, daily: 3, multiple: 4 };
         const frequencyScore = frequencyMap[answers.frequency as string] || 0;
+        
         const hardScore = parseInt(answers.hardToGoWithout) || 0;
-        const spendingScore = Math.min(Math.floor((parseInt(answers.dailySpending) || 0) / 300), 4);
-        const triggersScore = Math.min((answers.triggers?.length || 0), 4);
+        
+        const shiftScore = answers.consumptionShift === 'yes' ? 2 : 0;
+        
+        const moodScore = answers.moodDifference === 'yes' ? 2 : answers.moodDifference === 'alittle' ? 1 : 0;
+        
+        const spendingMap: Record<string, number> = { 
+            '0-10': 0, 
+            '20-30': 1, 
+            '30-60': 2, 
+            '60-100': 3, 
+            '100+': 4 
+        };
+        const spendingScore = spendingMap[answers.monthlySpending as string] || 0;
 
-        const sugarDependencyScore = frequencyScore + hardScore + spendingScore + triggersScore;
+        const sugarDependencyScore = frequencyScore + hardScore + shiftScore + moodScore + spendingScore;
 
         await updateOnboardingData({
             gender: answers.gender,
             sugarFrequency: answers.frequency,
+            consumptionShift: answers.consumptionShift,
             dailySugarGrams: answers.intake,
-            nickname: answers.nickname,
-            triggers: answers.triggers,
             hardToGoWithout: parseInt(answers.hardToGoWithout) || 0,
-            dailySpendingCents: parseInt(answers.dailySpending) || 0,
+            triggers: answers.triggers,
+            moodDifference: answers.moodDifference,
+            monthlySpending: answers.monthlySpending,
+            reasons: answers.reasons,
+            otherReason: answers.otherReason,
+            nickname: answers.nickname,
+            age: answers.age,
             sugarDependencyScore,
         });
     };
@@ -278,10 +349,20 @@ export default function ComprehensiveQuizScreen({ navigation }: ComprehensiveQui
         const frequencyMap2: Record<string, number> = { rarely: 1, weekly: 2, daily: 3, multiple: 4 };
         const frequencyScore = frequencyMap2[answers.frequency as string] || 0;
         const hardScore = parseInt(answers.hardToGoWithout) || 0;
-        const moneyScore = parseInt(answers.moneySpending) || 0;
-        const triggersScore = Math.min((answers.triggers?.length || 0), 4);
+        
+        const shiftScore = answers.consumptionShift === 'yes' ? 2 : 0;
+        const moodScore = answers.moodDifference === 'yes' ? 2 : answers.moodDifference === 'alittle' ? 1 : 0;
+        
+        const spendingMap: Record<string, number> = { 
+            '0-10': 0, 
+            '20-30': 1, 
+            '30-60': 2, 
+            '60-100': 3, 
+            '100+': 4 
+        };
+        const spendingScore = spendingMap[answers.monthlySpending as string] || 0;
 
-        const totalScore = frequencyScore + hardScore + moneyScore + triggersScore;
+        const totalScore = frequencyScore + hardScore + shiftScore + moodScore + spendingScore;
         const maxScore = 16;
         const percentage = Math.round((totalScore / maxScore) * 100);
 
@@ -359,7 +440,7 @@ export default function ComprehensiveQuizScreen({ navigation }: ComprehensiveQui
                 return (
                     <View style={styles.singleColumnContainer}>
                         {filteredOptions.map((option) => {
-                            const isSelected = answers.goals?.includes(option.id);
+                            const isSelected = answers[question.id]?.includes(option.id);
                             return (
                                 <TouchableOpacity
                                     key={option.id}
@@ -367,7 +448,7 @@ export default function ComprehensiveQuizScreen({ navigation }: ComprehensiveQui
                                         styles.singleRowOptionCard,
                                         isSelected && styles.singleRowOptionCardSelected,
                                     ]}
-                                    onPress={() => handleMultiSelect(option.id, 'goals')}
+                                    onPress={() => handleMultiSelect(option.id, question.id)}
                                     activeOpacity={0.7}
                                 >
                                     <Text style={styles.singleRowEmoji}>{option.emoji}</Text>
@@ -392,30 +473,44 @@ export default function ComprehensiveQuizScreen({ navigation }: ComprehensiveQui
                 return (
                     <View style={styles.singleColumnContainer}>
                         {filteredOptions.map((option) => {
-                            const isSelected = answers.triggers?.includes(option.id);
+                            const isSelected = answers[question.id]?.includes(option.id);
                             return (
-                                <TouchableOpacity
-                                    key={option.id}
-                                    style={[
-                                        styles.singleRowOptionCard,
-                                        isSelected && styles.singleRowOptionCardSelected,
-                                    ]}
-                                    onPress={() => handleMultiSelect(option.id, 'triggers')}
-                                    activeOpacity={0.7}
-                                >
-                                    <Text style={styles.singleRowEmoji}>{option.emoji}</Text>
-                                    <Text style={[
-                                        styles.singleRowLabel,
-                                        isSelected && styles.singleRowLabelSelected,
-                                    ]}>
-                                        {option.label}
-                                    </Text>
-                                    {isSelected && (
-                                        <View style={styles.singleRowCheckmark}>
-                                            <Text style={styles.singleRowCheckmarkText}>✓</Text>
+                                <View key={option.id}>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.singleRowOptionCard,
+                                            isSelected && styles.singleRowOptionCardSelected,
+                                        ]}
+                                        onPress={() => handleMultiSelect(option.id, question.id)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={styles.singleRowEmoji}>{option.emoji}</Text>
+                                        <Text style={[
+                                            styles.singleRowLabel,
+                                            isSelected && styles.singleRowLabelSelected,
+                                        ]}>
+                                            {option.label}
+                                        </Text>
+                                        {isSelected && (
+                                            <View style={styles.singleRowCheckmark}>
+                                                <Text style={styles.singleRowCheckmarkText}>✓</Text>
+                                            </View>
+                                        )}
+                                    </TouchableOpacity>
+                                    
+                                    {option.isOther && isSelected && (
+                                        <View style={styles.otherInputContainer}>
+                                            <TextInput
+                                                style={styles.otherInput}
+                                                placeholder="Please specify..."
+                                                placeholderTextColor={looviColors.text.muted}
+                                                value={answers.otherReason}
+                                                onChangeText={handleOtherReasonChange}
+                                                autoFocus
+                                            />
                                         </View>
                                     )}
-                                </TouchableOpacity>
+                                </View>
                             );
                         })}
                     </View>
@@ -472,10 +567,40 @@ export default function ComprehensiveQuizScreen({ navigation }: ComprehensiveQui
                             placeholder="Enter your name..."
                             placeholderTextColor={looviColors.text.muted}
                             value={answers.nickname}
-                            onChangeText={handleTextChange}
+                            onChangeText={(text) => handleUserInfoChange('nickname', text)}
                             autoCapitalize="words"
                             maxLength={20}
                         />
+                    </View>
+                );
+
+            case 'userInfo':
+                return (
+                    <View style={styles.userInfoContainer}>
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>What should we call you?</Text>
+                            <TextInput
+                                style={styles.textInput}
+                                placeholder="Your name"
+                                placeholderTextColor={looviColors.text.muted}
+                                value={answers.nickname}
+                                onChangeText={(text) => handleUserInfoChange('nickname', text)}
+                                autoCapitalize="words"
+                                maxLength={20}
+                            />
+                        </View>
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>How old are you?</Text>
+                            <TextInput
+                                style={styles.textInput}
+                                placeholder="Your age"
+                                placeholderTextColor={looviColors.text.muted}
+                                value={answers.age}
+                                onChangeText={(text) => handleUserInfoChange('age', text.replace(/[^0-9]/g, ''))}
+                                keyboardType="number-pad"
+                                maxLength={3}
+                            />
+                        </View>
                     </View>
                 );
 
@@ -513,8 +638,8 @@ export default function ComprehensiveQuizScreen({ navigation }: ComprehensiveQui
                                 </View>
                                 <View style={styles.resultStatDivider} />
                                 <View style={styles.resultStatItem}>
-                                    <Text style={styles.resultStatValue}>{answers.goals?.length || 0}</Text>
-                                    <Text style={styles.resultStatLabel}>Goals set</Text>
+                                    <Text style={styles.resultStatValue}>{answers.reasons?.length || 0}</Text>
+                                    <Text style={styles.resultStatLabel}>Reasons set</Text>
                                 </View>
                                 <View style={styles.resultStatDivider} />
                                 <View style={styles.resultStatItem}>
@@ -584,8 +709,8 @@ export default function ComprehensiveQuizScreen({ navigation }: ComprehensiveQui
                     </Animated.View>
                 </ScrollView>
 
-                {/* Continue Button (for multi-select, slider, text, triggers) */}
-                {(question.type === 'multi' || question.type === 'slider' || question.type === 'text' || question.type === 'triggers') && (
+                {/* Continue Button (for multi-select, slider, text, triggers, userInfo) */}
+                {(question.type === 'multi' || question.type === 'slider' || question.type === 'text' || question.type === 'triggers' || question.type === 'userInfo') && (
                     <View style={styles.footer}>
                         <TouchableOpacity
                             style={[
@@ -920,5 +1045,32 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: spacing.xl,
         marginBottom: spacing.md,
+    },
+    userInfoContainer: {
+        paddingHorizontal: spacing.md,
+        gap: spacing.xl,
+    },
+    inputGroup: {
+        gap: spacing.sm,
+    },
+    inputLabel: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: looviColors.text.primary,
+        marginLeft: spacing.xs,
+    },
+    otherInputContainer: {
+        marginTop: spacing.xs,
+        marginBottom: spacing.md,
+        paddingHorizontal: spacing.md,
+    },
+    otherInput: {
+        backgroundColor: 'rgba(255,255,255,0.8)',
+        borderRadius: borderRadius.lg,
+        padding: spacing.md,
+        fontSize: 16,
+        color: looviColors.text.primary,
+        borderWidth: 2,
+        borderColor: looviColors.accent.primary,
     },
 });
