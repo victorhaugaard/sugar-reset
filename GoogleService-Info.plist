@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>68240123690-a3vhmp88g4ng97npdpgkvkbgrspj4hfr.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.68240123690-a3vhmp88g4ng97npdpgkvkbgrspj4hfr</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>68240123690-th2l1kn7fj5i08qf6iqsfpdilevcbbq9.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyAaA7goBvmfktn5zZuA7lB_2GMTi2PpOVI</string>
+	<key>GCM_SENDER_ID</key>
+	<string>68240123690</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.sugarreset.app</string>
+	<key>PROJECT_ID</key>
+	<string>sugar-reset</string>
+	<key>STORAGE_BUCKET</key>
+	<string>sugar-reset.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:68240123690:ios:97fd5c54e3ab8e70586053</string>
+</dict>
+</plist>

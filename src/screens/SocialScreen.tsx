@@ -33,10 +33,10 @@ import { FriendRequestCard } from '../components/FriendRequestCard';
 import { CommunityStatsWidget } from '../components/CommunityStatsWidget';
 import { CreatePostModal } from '../components/CreatePostModal';
 import { friendService } from '../services/friendService';
-import { postService, Post } from '../services/postService';
+import { postService } from '../services/postService';
 import { useAuthContext } from '../context/AuthContext';
 import { useUserData } from '../context/UserDataContext';
-import { Friend, FriendRequest, UserStats, User } from '../types';
+import { Friend, FriendRequest, UserStats, User, Post } from '../types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -304,7 +304,11 @@ export default function SocialScreen() {
                     </GlassCard>
                 ) : (
                     posts.map((post: Post) => (
-                        <TouchableOpacity key={post.id} activeOpacity={0.9}>
+                        <TouchableOpacity
+                            key={post.id}
+                            activeOpacity={0.9}
+                            onPress={() => navigation.navigate('PostDetail', { post })}
+                        >
                             <GlassCard padding="lg" style={styles.postCard}>
                                 {/* Post Header */}
                                 <View style={styles.postHeader}>

@@ -111,7 +111,22 @@ export type RootStackParamList = {
     Alternatives: undefined;
     InnerCircle: undefined;
     EmergencyCall: undefined;
+    PostDetail: { post: Post };
 };
+
+export interface Post {
+    id: string;
+    authorId: string;
+    authorName: string;
+    authorUsername?: string;
+    title: string;
+    content: string;
+    tags: string[];
+    upvotes: number;
+    commentCount: number;
+    createdAt: Date;
+    updatedAt: Date;
+}
 
 export type AuthStackParamList = {
     Welcome: undefined;

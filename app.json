@@ -16,8 +16,9 @@
       "icon": "./src/public/appstore.png",
       "supportsTablet": true,
       "bundleIdentifier": "com.sugarreset.app",
+      "appleTeamId": "LX5566JXPP",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "NSHealthShareUsageDescription": "SugarReset needs access to your health data to sync your daily nutrition and sugar intake.",
         "NSHealthUpdateUsageDescription": "SugarReset needs access to update your health data with your logged nutrition.",
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -28,6 +29,7 @@
         "backgroundColor": "#0D0F12"
       },
       "package": "com.sugarreset.app",
+      "googleServicesFile": "./google-services.json",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -45,7 +47,14 @@
     },
     "owner": "victorhaugaard",
     "plugins": [
-      "expo-font"
+      "expo-font",
+      "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.68240123690-a3vhmp88g4ng97npdpgkvkbgrspj4hfr"
+        }
+      ]
     ]
   }
 }
