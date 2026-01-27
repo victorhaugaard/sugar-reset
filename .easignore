@@ -1,0 +1,12 @@
+# .easignore
+# Files to ignore when uploading to EAS Build
+# We WANT GoogleService-Info.plist and google-services.json to be uploaded, 
+# even though they are in .gitignore.
+# So we DO NOT list them here.
+
+node_modules/
+.expo/
+dist/
+web-build/
+.git/
+.DS_Store
