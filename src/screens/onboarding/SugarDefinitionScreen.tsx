@@ -171,7 +171,7 @@ export default function SugarDefinitionScreen({ navigation }: SugarDefinitionScr
                         onPress={handleContinue}
                         activeOpacity={0.8}
                     >
-                        <Text style={styles.continueButtonText}>Got it! Start Quiz →</Text>
+                        <Text style={styles.continueButtonText}>Got it!</Text>
                     </TouchableOpacity>
                 </View>
             </SafeAreaView>

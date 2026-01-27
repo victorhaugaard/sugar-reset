@@ -15,14 +15,18 @@ import {
     ScrollView,
     Animated,
     Dimensions,
+    Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Slider from '@react-native-community/slider';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { spacing, borderRadius } from '../../theme';
 import LooviBackground, { looviColors } from '../../components/LooviBackground';
 import { GlassCard } from '../../components/GlassCard';
 import { useUserData } from '../../context/UserDataContext';
+import { PlanBuildingAnimation } from '../../components/PlanBuildingAnimation';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -96,9 +100,10 @@ const getQuestions = (gender: string | null): Question[] => {
             id: 'consumptionShift',
             type: 'single',
             emoji: '📈',
-            title: 'Have you noticed a shift towards a higher or more frequent consumption of sugar?',
+            title: 'Has your sugar consumption grown over time?',
             options: [
                 { id: 'yes', emoji: '📈', label: 'Yes' },
+                { id: 'fluctuates', emoji: '📊', label: 'It varies' },
                 { id: 'no', emoji: '📉', label: 'No' },
             ],
         },
@@ -135,11 +140,11 @@ const getQuestions = (gender: string | null): Question[] => {
             id: 'moodDifference',
             type: 'single',
             emoji: '🎭',
-            title: 'Do you notice differences in your mood when you consume a lot of sugar, or when you’ve had no sugar at all?',
+            title: "How does your mood change when you don't eat sugar?",
             options: [
-                { id: 'yes', emoji: '🎭', label: 'Yes' },
-                { id: 'alittle', emoji: '🤔', label: 'A little' },
-                { id: 'no', emoji: '😐', label: 'No' },
+                { id: 'worse', emoji: '😞', label: 'It becomes worse' },
+                { id: 'same', emoji: '😐', label: 'It stays the same' },
+                { id: 'better', emoji: '😊', label: 'It becomes better' },
             ],
         },
         {
@@ -148,18 +153,17 @@ const getQuestions = (gender: string | null): Question[] => {
             emoji: '💵',
             title: 'How much do you spend on sugary products each month?',
             options: [
-                { id: '0-10', emoji: '💚', label: '0 - $10 per month' },
-                { id: '20-30', emoji: '💛', label: '$20 - $30 per month' },
-                { id: '30-60', emoji: '🧡', label: '$30 - $60 per month' },
-                { id: '60-100', emoji: '❤️', label: '$60 - $100 per month' },
-                { id: '100+', emoji: '💔', label: '$100+ per month' },
+                { id: '0-10', emoji: '💚', label: '$0 - $10 per month' },
+                { id: '10-50', emoji: '💛', label: '$10 - $50 per month' },
+                { id: '50-100', emoji: '🧡', label: '$50 - $100 per month' },
+                { id: '100+', emoji: '❤️', label: '$100+ per month' },
             ],
         },
         {
             id: 'reasons',
             type: 'triggers', // Using triggers type for multi-select
             emoji: '🎯',
-            title: 'What are your primary reasons to reduce your sugar intake?',
+            title: 'Why are you reducing your sugar intake?',
             subtitle: 'Select all that apply',
             options: [
                 { id: 'dependence', emoji: '⛓️', label: 'Reducing sugar dependence' },
@@ -187,6 +191,7 @@ export default function ComprehensiveQuizScreen({ navigation, route }: Comprehen
     const { updateOnboardingData } = useUserData();
     const [currentQuestion, setCurrentQuestion] = useState(0);
     const [showResult, setShowResult] = useState(false);
+    const [isCalculating, setIsCalculating] = useState(false);
 
     // Answers state
     const [answers, setAnswers] = useState<Record<string, any>>({
@@ -284,13 +289,26 @@ export default function ComprehensiveQuizScreen({ navigation, route }: Comprehen
     };
 
     const goNext = () => {
+        console.log('goNext called, currentQuestion:', currentQuestion, 'QUESTIONS.length:', QUESTIONS.length);
+        Keyboard.dismiss();
+        
         if (currentQuestion < QUESTIONS.length - 1) {
             animateTransition(() => setCurrentQuestion(prev => prev + 1));
         } else {
-            // Save all data and show result
-            saveAnswers();
-            showResultScreen();
+            console.log('Final question reached, checking canProceed...');
+            if (canProceed()) {
+                console.log('Proceeding to calculate results...');
+                saveAnswers().catch(err => console.error('Error saving answers:', err));
+                setIsCalculating(true);
+            } else {
+                console.log('canProceed returned false');
+            }
         }
+    };
+
+    const handleAnimationComplete = () => {
+        setIsCalculating(false);
+        showResultScreen();
     };
 
     const saveAnswers = async () => {
@@ -300,16 +318,15 @@ export default function ComprehensiveQuizScreen({ navigation, route }: Comprehen
         
         const hardScore = parseInt(answers.hardToGoWithout) || 0;
         
-        const shiftScore = answers.consumptionShift === 'yes' ? 2 : 0;
+        const shiftScore = answers.consumptionShift === 'yes' ? 2 : answers.consumptionShift === 'fluctuates' ? 1 : 0;
         
-        const moodScore = answers.moodDifference === 'yes' ? 2 : answers.moodDifference === 'alittle' ? 1 : 0;
+        const moodScore = answers.moodDifference === 'worse' ? 2 : answers.moodDifference === 'same' ? 1 : 0;
         
         const spendingMap: Record<string, number> = { 
             '0-10': 0, 
-            '20-30': 1, 
-            '30-60': 2, 
-            '60-100': 3, 
-            '100+': 4 
+            '10-50': 1, 
+            '50-100': 2, 
+            '100+': 3 
         };
         const spendingScore = spendingMap[answers.monthlySpending as string] || 0;
 
@@ -344,48 +361,90 @@ export default function ComprehensiveQuizScreen({ navigation, route }: Comprehen
         navigation.navigate('SugarDangers');
     };
 
+    // Extract primary motivation/trigger for emotional bridge
+    const getPrimaryMotivation = (): string => {
+        // Priority 1: Check reasons (more specific motivations)
+        const reasons = answers.reasons || [];
+        if (reasons.length > 0) {
+            const reasonMap: Record<string, string> = {
+                'energy': 'energy crashes',
+                'weight': 'weight struggles',
+                'health': 'health concerns',
+                'balance': 'mood swings',
+                'beauty': 'skin issues',
+                'dependence': 'sugar cravings',
+            };
+            // Return the first reason found, or a default
+            for (const reason of reasons) {
+                if (reasonMap[reason]) {
+                    return reasonMap[reason];
+                }
+            }
+        }
+
+        // Priority 2: Check triggers
+        const triggers = answers.triggers || [];
+        if (triggers.length > 0) {
+            const triggerMap: Record<string, string> = {
+                'stress': 'stress eating',
+                'tired': 'energy crashes',
+                'emotional': 'emotional eating',
+                'boredom': 'boredom snacking',
+            };
+            for (const trigger of triggers) {
+                if (triggerMap[trigger]) {
+                    return triggerMap[trigger];
+                }
+            }
+        }
+
+        // Default fallback
+        return 'sugar cravings';
+    };
+
     // Calculate result
     const getResultMessage = () => {
         const frequencyMap2: Record<string, number> = { rarely: 1, weekly: 2, daily: 3, multiple: 4 };
         const frequencyScore = frequencyMap2[answers.frequency as string] || 0;
         const hardScore = parseInt(answers.hardToGoWithout) || 0;
         
-        const shiftScore = answers.consumptionShift === 'yes' ? 2 : 0;
-        const moodScore = answers.moodDifference === 'yes' ? 2 : answers.moodDifference === 'alittle' ? 1 : 0;
+        const shiftScore = answers.consumptionShift === 'yes' ? 2 : answers.consumptionShift === 'fluctuates' ? 1 : 0;
+        const moodScore = answers.moodDifference === 'worse' ? 2 : answers.moodDifference === 'same' ? 1 : 0;
         
         const spendingMap: Record<string, number> = { 
             '0-10': 0, 
-            '20-30': 1, 
-            '30-60': 2, 
-            '60-100': 3, 
-            '100+': 4 
+            '10-50': 1, 
+            '50-100': 2, 
+            '100+': 3 
         };
         const spendingScore = spendingMap[answers.monthlySpending as string] || 0;
 
         const totalScore = frequencyScore + hardScore + shiftScore + moodScore + spendingScore;
-        const maxScore = 16;
-        const percentage = Math.round((totalScore / maxScore) * 100);
+        const maxScore = 15;
+        const rawPercentage = Math.round((totalScore / maxScore) * 100);
 
-        if (percentage >= 60) {
-            return {
-                emoji: '💪',
-                title: 'Perfect Match!',
-                text: `Based on your answers, Sugarest is exactly what you need. We'll help you break free from sugar dependency.`,
-                score: percentage,
-            };
-        } else if (percentage >= 35) {
-            return {
-                emoji: '✨',
-                title: 'Great Match!',
-                text: `You have some sugar habits worth addressing. Sugarest can help you build healthier patterns.`,
-                score: percentage,
-            };
+        // Determine dependency level
+        let dependencyLevel = 'Significant';
+        if (rawPercentage >= 60) {
+            dependencyLevel = 'High';
+        } else if (rawPercentage < 35) {
+            dependencyLevel = 'Low';
         }
+
+        const adjustedPercentage = (() => {
+            // Low dependency: map to 15-25% range
+            if (rawPercentage < 35) {
+                const scaled = 15 + (rawPercentage / 34) * 10;
+                return Math.round(Math.min(25, Math.max(15, scaled)));
+            }
+
+            const scaled = 55 + ((rawPercentage - 35) / 65) * 45;
+            return Math.round(Math.min(100, Math.max(55, scaled)));
+        })();
+
         return {
-            emoji: '🌱',
-            title: 'Good Match!',
-            text: `You're in a good place! Sugarest will help you maintain healthy habits and prevent sugar issues.`,
-            score: percentage,
+            score: adjustedPercentage,
+            dependencyLevel,
         };
     };
 
@@ -611,58 +670,103 @@ export default function ComprehensiveQuizScreen({ navigation, route }: Comprehen
 
     if (showResult) {
         const result = getResultMessage();
+        const average = 34;
+        const userScore = Math.max(result.score, 20); // Ensure minimum visibility
+        const userPosition = Math.min(userScore, 95); // Cap at 95% to keep marker visible
+
         return (
             <LooviBackground variant="mixed">
                 <SafeAreaView style={styles.container}>
-                    <Animated.View
-                        style={[
-                            styles.resultContainer,
-                            {
-                                opacity: resultFade,
-                                transform: [{ scale: resultScale }],
-                            },
-                        ]}
+                    <ScrollView
+                        style={styles.scrollView}
+                        contentContainerStyle={styles.resultScrollContent}
+                        showsVerticalScrollIndicator={false}
                     >
-                        <GlassCard variant="light" padding="lg" style={styles.resultCard}>
-                            <Text style={styles.resultEmoji}>{result.emoji}</Text>
-                            <Text style={styles.resultTitle}>{result.title}</Text>
-                            <Text style={styles.resultText}>{result.text}</Text>
-
-                            {/* Stats Summary */}
-                            <View style={styles.resultStats}>
-                                <View style={styles.resultStatItem}>
-                                    <Text style={styles.resultStatValue}>
-                                        {answers.intake >= 150 ? '150+' : answers.intake}g
-                                    </Text>
-                                    <Text style={styles.resultStatLabel}>Daily intake</Text>
-                                </View>
-                                <View style={styles.resultStatDivider} />
-                                <View style={styles.resultStatItem}>
-                                    <Text style={styles.resultStatValue}>{answers.reasons?.length || 0}</Text>
-                                    <Text style={styles.resultStatLabel}>Reasons set</Text>
-                                </View>
-                                <View style={styles.resultStatDivider} />
-                                <View style={styles.resultStatItem}>
-                                    <Text style={styles.resultStatValue}>{result.score}%</Text>
-                                    <Text style={styles.resultStatLabel}>Match</Text>
-                                </View>
-                            </View>
-                        </GlassCard>
-
-                        <Text style={styles.resultGreeting}>
-                            Hi {answers.nickname}! 👋
-                        </Text>
-
-                        <TouchableOpacity
-                            style={styles.continueButton}
-                            onPress={handleContinue}
-                            activeOpacity={0.8}
+                        <Animated.View
+                            style={[
+                                styles.resultContainer,
+                                {
+                                    opacity: resultFade,
+                                    transform: [{ scale: resultScale }],
+                                },
+                            ]}
                         >
-                            <Text style={styles.continueButtonText}>
-                                Learn About Sugar →
-                            </Text>
-                        </TouchableOpacity>
-                    </Animated.View>
+                            {/* Headline */}
+                            <Text style={styles.resultHeadline}>The results are in.</Text>
+
+                            {/* Verdict */}
+                            <View style={styles.resultVerdictContainer}>
+                                <Text style={styles.resultVerdict}>
+                                    Your profile indicates
+                                </Text>
+                                <Text style={styles.resultVerdictBold}>
+                                    {result.dependencyLevel} Sugar Dependency
+                                </Text>
+                            </View>
+
+                            {/* Habit Spectrum Card */}
+                            <GlassCard variant="light" padding="lg" style={styles.spectrumCard}>
+                                <Text style={styles.spectrumTitle}>Habit Spectrum</Text>
+                                
+                                {/* Spectrum Container */}
+                                <View style={styles.spectrumContainer}>
+                                    {/* The Spectrum Track */}
+                                    <View style={styles.spectrumTrackContainer}>
+                                        <LinearGradient
+                                            colors={[looviColors.skyBlue, looviColors.coralOrange]}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 0 }}
+                                            style={styles.spectrumTrack}
+                                        />
+                                        
+                                        {/* Average Marker - line extends from bar to label */}
+                                        <View style={[styles.markerWithLine, { left: `${average}%` }]}>
+                                            <View style={styles.markerLineExtended} />
+                                            <Text style={styles.smallMarkerLabel}>Average</Text>
+                                            <Text style={styles.smallMarkerScore}>{average}%</Text>
+                                        </View>
+
+                                        {/* User Marker - emoji on bar with line and label below */}
+                                        <View style={[styles.userMarkerWithLine, { left: `${userPosition}%` }]}>
+                                            <View style={styles.userMarkerCircle}>
+                                                <Text style={styles.userMarkerEmoji}>
+                                                    {answers.gender === 'male' ? '👨' : answers.gender === 'female' ? '👩' : '👤'}
+                                                </Text>
+                                            </View>
+                                            <Text style={styles.userMarkerLabel}>You</Text>
+                                            <Text style={styles.userMarkerScore}>{result.score}%</Text>
+                                        </View>
+                                    </View>
+
+                                    {/* Score Comparison */}
+                                    <View style={styles.scoreComparison}>
+                                        <Text style={styles.scoreComparisonText}>
+                                            You scored <Text style={styles.scoreComparisonBold}>{result.score}%</Text>, 
+                                            {' '}significantly higher than the average of <Text style={styles.scoreComparisonBold}>{average}%</Text>.
+                                        </Text>
+                                    </View>
+                                </View>
+                            </GlassCard>
+
+                            {/* Emotional Bridge */}
+                            <View style={styles.emotionalBridge}>
+                                <Text style={styles.emotionalBridgeText}>
+                                    This dependency strains your body and worsens mental health issues.
+                                </Text>
+                            </View>
+
+                            {/* CTA Button */}
+                            <TouchableOpacity
+                                style={styles.checkSymptomsButton}
+                                onPress={handleContinue}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={styles.checkSymptomsButtonText}>
+                                    Discover how this affects you →
+                                </Text>
+                            </TouchableOpacity>
+                        </Animated.View>
+                    </ScrollView>
                 </SafeAreaView>
             </LooviBackground>
         );
@@ -670,64 +774,74 @@ export default function ComprehensiveQuizScreen({ navigation, route }: Comprehen
 
     return (
         <LooviBackground variant="coralTop">
-            <SafeAreaView style={styles.container}>
-                {/* Progress Bar */}
-                <View style={styles.progressContainer}>
-                    <View style={styles.progressTrack}>
-                        <Animated.View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-                    </View>
-                    <Text style={styles.progressText}>
-                        Question {currentQuestion + 1} of {QUESTIONS.length}
-                    </Text>
-                </View>
-
-                <ScrollView
-                    style={styles.scrollView}
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
-                >
-                    <Animated.View
-                        style={[
-                            styles.questionContainer,
-                            {
-                                opacity: fadeAnim,
-                                transform: [{ translateY: slideAnim }],
-                            },
-                        ]}
-                    >
-                        {/* Question Header */}
-                        <View style={styles.questionHeader}>
-                            <Text style={styles.questionEmoji}>{question.emoji}</Text>
-                            <Text style={styles.questionTitle}>{question.title}</Text>
-                            {question.subtitle && (
-                                <Text style={styles.questionSubtitle}>{question.subtitle}</Text>
-                            )}
+            {!isCalculating && (
+                <SafeAreaView style={styles.container}>
+                    {/* Progress Bar */}
+                    <View style={styles.progressContainer}>
+                        <View style={styles.progressTrack}>
+                            <Animated.View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
                         </View>
-
-                        {/* Question Content */}
-                        {renderQuestion()}
-                    </Animated.View>
-                </ScrollView>
-
-                {/* Continue Button (for multi-select, slider, text, triggers, userInfo) */}
-                {(question.type === 'multi' || question.type === 'slider' || question.type === 'text' || question.type === 'triggers' || question.type === 'userInfo') && (
-                    <View style={styles.footer}>
-                        <TouchableOpacity
-                            style={[
-                                styles.continueButton,
-                                !canProceed() && styles.continueButtonDisabled,
-                            ]}
-                            onPress={goNext}
-                            disabled={!canProceed()}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={styles.continueButtonText}>
-                                {currentQuestion < QUESTIONS.length - 1 ? 'Continue' : 'See Results'}
-                            </Text>
-                        </TouchableOpacity>
+                        <Text style={styles.progressText}>
+                            Question {currentQuestion + 1} of {QUESTIONS.length}
+                        </Text>
                     </View>
-                )}
-            </SafeAreaView>
+
+                    <ScrollView
+                        style={styles.scrollView}
+                        contentContainerStyle={styles.scrollContent}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        <Animated.View
+                            style={[
+                                styles.questionContainer,
+                                {
+                                    opacity: fadeAnim,
+                                    transform: [{ translateY: slideAnim }],
+                                },
+                            ]}
+                        >
+                            {/* Question Header */}
+                            <View style={styles.questionHeader}>
+                                <Text style={styles.questionEmoji}>{question.emoji}</Text>
+                                <Text style={styles.questionTitle}>{question.title}</Text>
+                                {question.subtitle && (
+                                    <Text style={styles.questionSubtitle}>{question.subtitle}</Text>
+                                )}
+                            </View>
+
+                            {/* Question Content */}
+                            {renderQuestion()}
+                        </Animated.View>
+                    </ScrollView>
+
+                    {/* Continue Button (for multi-select, slider, text, triggers, userInfo) */}
+                    {(question.type === 'multi' || question.type === 'slider' || question.type === 'text' || question.type === 'triggers' || question.type === 'userInfo') && (
+                        <View style={styles.footer}>
+                            <TouchableOpacity
+                                style={[
+                                    styles.continueButton,
+                                    !canProceed() && styles.continueButtonDisabled,
+                                ]}
+                                onPress={goNext}
+                                disabled={!canProceed()}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={styles.continueButtonText}>
+                                    {currentQuestion < QUESTIONS.length - 1 ? 'Continue' : 'See Results'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                </SafeAreaView>
+            )}
+            
+            {/* Transition Animation */}
+            {isCalculating && (
+                <PlanBuildingAnimation 
+                    answers={answers} 
+                    onComplete={handleAnimationComplete} 
+                />
+            )}
         </LooviBackground>
     );
 }
@@ -982,73 +1096,178 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#FFFFFF',
     },
-    resultContainer: {
-        flex: 1,
-        paddingHorizontal: spacing.screen.horizontal,
-        paddingTop: spacing['2xl'],
+    resultScrollContent: {
+        flexGrow: 1,
         justifyContent: 'center',
-    },
-    resultCard: {
-        alignItems: 'center',
         paddingVertical: spacing['2xl'],
     },
-    resultEmoji: {
-        fontSize: 64,
-        marginBottom: spacing.lg,
+    resultContainer: {
+        paddingHorizontal: spacing.screen.horizontal,
     },
-    resultTitle: {
+    resultHeadline: {
         fontSize: 28,
         fontWeight: '700',
         color: looviColors.text.primary,
-        marginBottom: spacing.md,
+        textAlign: 'center',
+        marginBottom: spacing.xl,
     },
-    resultText: {
+    resultVerdictContainer: {
+        alignItems: 'center',
+        marginBottom: spacing['2xl'],
+    },
+    resultVerdict: {
+        fontSize: 16,
+        fontWeight: '400',
+        color: looviColors.text.primary,
+        textAlign: 'center',
+        lineHeight: 24,
+    },
+    resultVerdictBold: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: looviColors.accent.primary,
+        textAlign: 'center',
+    },
+    spectrumCard: {
+        marginBottom: spacing['2xl'],
+        paddingHorizontal: spacing.md,
+    },
+    spectrumTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: looviColors.text.primary,
+        textAlign: 'center',
+        marginBottom: spacing.lg,
+    },
+    spectrumContainer: {
+        width: '100%',
+    },
+    spectrumTrackContainer: {
+        width: '100%',
+        marginBottom: spacing.xs,
+        position: 'relative',
+        paddingHorizontal: spacing.xs,
+        paddingBottom: 60, // Space for labels below bar
+    },
+    spectrumTrack: {
+        width: '100%',
+        height: 28,
+        borderRadius: borderRadius.lg,
+        position: 'relative',
+        zIndex: 1,
+    },
+    markerWithLine: {
+        position: 'absolute',
+        top: 10, // Start at middle of bar (bar is 28px, so 14 is middle, 10 gives slight overlap)
+        alignItems: 'center',
+        transform: [{ translateX: -20 }],
+        zIndex: 5,
+    },
+    markerLineExtended: {
+        width: 2,
+        height: 24, // Extends from middle of bar down past it
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderRadius: 1,
+        marginBottom: 4,
+    },
+    smallMarkerLabel: {
+        fontSize: 9,
+        fontWeight: '600',
+        color: looviColors.text.secondary,
+    },
+    smallMarkerScore: {
+        fontSize: 9,
+        fontWeight: '600',
+        color: looviColors.text.secondary,
+    },
+    userMarkerWithLine: {
+        position: 'absolute',
+        top: -6, // Position emoji above the bar
+        alignItems: 'center',
+        transform: [{ translateX: -20 }],
+        zIndex: 10,
+    },
+    userMarkerCircle: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: looviColors.accent.primary,
+        borderWidth: 4,
+        borderColor: '#FFFFFF',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: looviColors.accent.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        elevation: 8,
+        marginBottom: 4,
+    },
+    userMarkerEmoji: {
+        fontSize: 20,
+    },
+    userMarkerLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: looviColors.accent.primary,
+    },
+    userMarkerScore: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: looviColors.accent.primary,
+    },
+    scoreComparison: {
+        marginTop: spacing.xs,
+        paddingHorizontal: spacing.md,
+    },
+    scoreComparisonText: {
         fontSize: 16,
         fontWeight: '400',
         color: looviColors.text.secondary,
         textAlign: 'center',
         lineHeight: 24,
+    },
+    scoreComparisonBold: {
+        fontWeight: '700',
+        color: looviColors.text.primary,
+    },
+    emotionalBridge: {
+        marginBottom: spacing['2xl'],
         paddingHorizontal: spacing.md,
     },
-    resultStats: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: spacing.xl,
-        paddingTop: spacing.lg,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(0,0,0,0.08)',
-    },
-    resultStatItem: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    resultStatValue: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: looviColors.accent.primary,
-    },
-    resultStatLabel: {
-        fontSize: 11,
-        fontWeight: '400',
-        color: looviColors.text.tertiary,
-        marginTop: spacing.xs,
-    },
-    resultStatDivider: {
-        width: 1,
-        height: 35,
-        backgroundColor: 'rgba(0,0,0,0.1)',
-    },
-    resultGreeting: {
-        fontSize: 18,
-        fontWeight: '600',
+    emotionalBridgeText: {
+        fontSize: 12,
+        fontWeight: '500',
         color: looviColors.text.primary,
+        fontStyle: 'italic',
         textAlign: 'center',
-        marginTop: spacing.xl,
-        marginBottom: spacing.md,
+        lineHeight: 18,
+        textShadowColor: looviColors.accent.primary,
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 8,
+    },
+    checkSymptomsButton: {
+        backgroundColor: looviColors.accent.primary,
+        paddingVertical: 18,
+        paddingHorizontal: spacing.xl,
+        borderRadius: 30,
+        alignItems: 'center',
+        shadowColor: looviColors.coralOrange,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
+        elevation: 5,
+        marginTop: spacing.md,
+    },
+    checkSymptomsButtonText: {
+        color: '#FFFFFF',
+        fontSize: 18,
+        fontWeight: '700',
     },
     userInfoContainer: {
         paddingHorizontal: spacing.md,
         gap: spacing.xl,
+        marginTop: spacing['2xl'],
     },
     inputGroup: {
         gap: spacing.sm,
@@ -1057,7 +1276,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         color: looviColors.text.primary,
-        marginLeft: spacing.xs,
+        textAlign: 'center',
     },
     otherInputContainer: {
         marginTop: spacing.xs,
