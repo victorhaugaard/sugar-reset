@@ -27,20 +27,10 @@ import {
     QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { Post } from '../types';
 
-export interface Post {
-    id: string;
-    authorId: string;
-    authorName: string;
-    authorUsername?: string;
-    title: string;
-    content: string;
-    tags: string[];
-    upvotes: number;
-    commentCount: number;
-    createdAt: Date;
-    updatedAt: Date;
-}
+// Remove local Post interface definition
+/* export interface Post ... (removed) */
 
 export interface Comment {
     id: string;

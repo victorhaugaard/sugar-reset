@@ -2,7 +2,7 @@
  * SugarestWelcomeScreen
  * 
  * Welcome screen after the Learn About Sugar section.
- * Introduces Sugarest with captivating text.
+ * Introduces Sugarest with compact, authoritative design following Quittr aesthetic.
  */
 
 import React, { useRef, useEffect } from 'react';
@@ -19,9 +19,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { spacing } from '../../theme';
 import LooviBackground, { looviColors } from '../../components/LooviBackground';
-import { GlassCard } from '../../components/GlassCard';
+import { GradientText } from '../../components/GradientText';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Responsive font size based on screen width (base size for iPhone standard width of 375)
+const getResponsiveFontSize = (baseSize: number) => {
+    const scale = SCREEN_WIDTH / 375; // 375 is iPhone standard width
+    return Math.round(baseSize * scale);
+};
 
 type SugarestWelcomeScreenProps = {
     navigation: NativeStackNavigationProp<any, 'SugarestWelcome'>;
@@ -30,26 +36,17 @@ type SugarestWelcomeScreenProps = {
 export default function SugarestWelcomeScreen({ navigation }: SugarestWelcomeScreenProps) {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(30)).current;
-    const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
     useEffect(() => {
-        Animated.sequence([
-            Animated.parallel([
-                Animated.timing(fadeAnim, {
-                    toValue: 1,
-                    duration: 500,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(slideAnim, {
-                    toValue: 0,
-                    duration: 500,
-                    useNativeDriver: true,
-                }),
-            ]),
-            Animated.spring(scaleAnim, {
+        Animated.parallel([
+            Animated.timing(fadeAnim, {
                 toValue: 1,
-                friction: 8,
-                tension: 40,
+                duration: 500,
+                useNativeDriver: true,
+            }),
+            Animated.timing(slideAnim, {
+                toValue: 0,
+                duration: 500,
                 useNativeDriver: true,
             }),
         ]).start();
@@ -60,7 +57,7 @@ export default function SugarestWelcomeScreen({ navigation }: SugarestWelcomeScr
     };
 
     return (
-        <LooviBackground variant="coralTop">
+        <LooviBackground variant="blueDominant">
             <SafeAreaView style={styles.container}>
                 <Animated.View
                     style={[
@@ -94,40 +91,34 @@ export default function SugarestWelcomeScreen({ navigation }: SugarestWelcomeScr
                     </Animated.View>
 
                     {/* Welcome Message */}
-                    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-                        <GlassCard variant="light" padding="lg" style={styles.welcomeCard}>
-                            <Text style={styles.welcomeTitle}>Welcome to Sugarest</Text>
-                            <Text style={styles.welcomeSubtitle}>Your journey to sugar freedom starts here</Text>
+                    <View style={styles.welcomeSection}>
+                        <GradientText
+                            text="Welcome to Sugarest"
+                            colors={['#FF6B35', '#E8A87C', '#D4896A']}
+                            fontSize={getResponsiveFontSize(28)}
+                            fontWeight="900"
+                            style={styles.welcomeTitle}
+                        />
+                        <Text style={styles.welcomeSubtitle}>
+                            Join thousands of users breaking the cycle of sugar addiction through science and community support.
+                        </Text>
 
-                            <View style={styles.divider} />
-
-                            <Text style={styles.welcomeText}>
-                                You've taken the first step by understanding how sugar affects you.
-                                Now, let us show you how thousands of people just like you have
-                                transformed their relationship with sugar.
-                            </Text>
-
-                            <View style={styles.features}>
-                                <View style={styles.featureRow}>
-                                    <Text style={styles.featureEmoji}>🎯</Text>
-                                    <Text style={styles.featureText}>Personalized to your triggers</Text>
-                                </View>
-                                <View style={styles.featureRow}>
-                                    <Text style={styles.featureEmoji}>📊</Text>
-                                    <Text style={styles.featureText}>Science-backed approach</Text>
-                                </View>
-                                <View style={styles.featureRow}>
-                                    <Text style={styles.featureEmoji}>💪</Text>
-                                    <Text style={styles.featureText}>Daily support & motivation</Text>
-                                </View>
+                        {/* Features Row - Horizontal */}
+                        <View style={styles.featuresRow}>
+                            <View style={styles.featureItem}>
+                                <Text style={styles.featureIcon}>🎯</Text>
+                                <Text style={styles.featureLabel}>Personalized</Text>
                             </View>
-                        </GlassCard>
-                    </Animated.View>
-
-                    {/* Tagline */}
-                    <Text style={styles.tagline}>
-                        Break free from sugar. Feel amazing. Live better.
-                    </Text>
+                            <View style={styles.featureItem}>
+                                <Text style={styles.featureIcon}>📊</Text>
+                                <Text style={styles.featureLabel}>Science-Backed</Text>
+                            </View>
+                            <View style={styles.featureItem}>
+                                <Text style={styles.featureIcon}>💪</Text>
+                                <Text style={styles.featureLabel}>Social Support</Text>
+                            </View>
+                        </View>
+                    </View>
 
                     {/* Spacer */}
                     <View style={styles.spacer} />
@@ -138,7 +129,7 @@ export default function SugarestWelcomeScreen({ navigation }: SugarestWelcomeScr
                         onPress={handleContinue}
                         activeOpacity={0.8}
                     >
-                        <Text style={styles.continueButtonText}>See Success Stories →</Text>
+                        <Text style={styles.continueButtonText}>Learn how it works</Text>
                     </TouchableOpacity>
                 </Animated.View>
             </SafeAreaView>
@@ -153,71 +144,54 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
         paddingHorizontal: spacing.screen.horizontal,
-        paddingTop: spacing.lg,
+        paddingTop: spacing['3xl'],
         paddingBottom: spacing['2xl'],
+        justifyContent: 'center',
     },
     logoContainer: {
         alignItems: 'center',
-        marginBottom: spacing.lg,
+        marginBottom: spacing['2xl'],
     },
     logo: {
         width: SCREEN_WIDTH * 0.4,
         height: SCREEN_WIDTH * 0.25,
     },
-    welcomeCard: {
+    welcomeSection: {
         alignItems: 'center',
+        marginBottom: spacing['2xl'],
     },
     welcomeTitle: {
-        fontSize: 26,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-        marginBottom: spacing.xs,
-    },
-    welcomeSubtitle: {
-        fontSize: 15,
-        fontWeight: '500',
-        color: looviColors.accent.primary,
         marginBottom: spacing.md,
     },
-    divider: {
-        width: 60,
-        height: 3,
-        backgroundColor: looviColors.accent.primary,
-        borderRadius: 2,
-        marginBottom: spacing.lg,
-    },
-    welcomeText: {
+    welcomeSubtitle: {
         fontSize: 15,
         fontWeight: '400',
         color: looviColors.text.secondary,
         textAlign: 'center',
-        lineHeight: 24,
-        marginBottom: spacing.lg,
+        lineHeight: 22,
+        marginBottom: spacing['2xl'],
+        paddingHorizontal: spacing.md,
     },
-    features: {
-        alignSelf: 'stretch',
-        gap: spacing.sm,
-    },
-    featureRow: {
+    featuresRow: {
         flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'flex-start',
+        width: '100%',
+        paddingHorizontal: spacing.md,
+    },
+    featureItem: {
         alignItems: 'center',
-        gap: spacing.sm,
+        flex: 1,
     },
-    featureEmoji: {
-        fontSize: 20,
+    featureIcon: {
+        fontSize: 32,
+        marginBottom: spacing.sm,
     },
-    featureText: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: looviColors.text.primary,
-    },
-    tagline: {
-        fontSize: 16,
+    featureLabel: {
+        fontSize: 13,
         fontWeight: '600',
         color: looviColors.text.primary,
         textAlign: 'center',
-        marginTop: spacing.xl,
-        fontStyle: 'italic',
     },
     spacer: {
         flex: 1,
@@ -234,8 +208,8 @@ const styles = StyleSheet.create({
         elevation: 5,
     },
     continueButtonText: {
-        fontSize: 18,
-        fontWeight: '700',
+        fontSize: 17,
+        fontWeight: '600',
         color: '#FFFFFF',
     },
 });

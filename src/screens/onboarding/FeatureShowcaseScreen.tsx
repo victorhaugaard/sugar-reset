@@ -3,6 +3,7 @@
  * 
  * Swipeable carousel showing key app features with phone mockups.
  * Shows what users can expect from the app before they personalize.
+ * Each page swipes as a whole unit including the header.
  */
 
 import React, { useState, useRef } from 'react';
@@ -11,7 +12,6 @@ import {
     Text,
     StyleSheet,
     TouchableOpacity,
-    Animated,
     Dimensions,
     FlatList,
     Image,
@@ -19,11 +19,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { spacing, borderRadius } from '../../theme';
+import { spacing } from '../../theme';
 import LooviBackground, { looviColors } from '../../components/LooviBackground';
 import { GlassCard } from '../../components/GlassCard';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 type FeatureShowcaseScreenProps = {
     navigation: NativeStackNavigationProp<any, 'FeatureShowcase'>;
@@ -95,71 +95,56 @@ export default function FeatureShowcaseScreen({ navigation }: FeatureShowcaseScr
         }
     }).current;
 
-    const renderFeature = ({ item }: { item: Feature }) => (
-        <View style={styles.featureSlide}>
-            {/* Phone Mockup Container with Glow */}
-            <View style={styles.phoneGlowContainer}>
-                <View style={styles.phoneFrame}>
-                    {/* Metal Edge/Border */}
-                    <View style={styles.phoneBorderInner}>
-                        <View style={styles.phoneNotch} />
-                        <View style={styles.phoneScreen}>
-                            <Image
-                                source={item.image}
-                                style={styles.screenImage}
-                                resizeMode="cover"
-                            />
-                        </View>
-                        <View style={styles.phoneHomeIndicator} />
-                    </View>
-                </View>
-            </View>
-
-            {/* Feature Info */}
-            <View style={styles.featureInfo}>
-                <Text style={styles.featureEmoji}>{item.emoji}</Text>
-                <Text style={styles.featureTitle}>{item.title}</Text>
-                <Text style={styles.featureDescription}>{item.description}</Text>
-                <View style={styles.highlightBadge}>
-                    <Text style={styles.highlightText}>✓ {item.highlight}</Text>
-                </View>
-            </View>
-        </View>
-    );
-
-    return (
-        <LooviBackground variant="mixed">
-            <SafeAreaView style={styles.container}>
-                {/* Header */}
+    const renderFeature = ({ item, index }: { item: Feature; index: number }) => (
+        <View style={styles.fullPage}>
+            {/* Header - included in each slide */}
+            <SafeAreaView edges={['top']} style={styles.safeAreaTop}>
                 <View style={styles.header}>
                     <Text style={styles.headerTitle}>How It Works</Text>
                     <TouchableOpacity onPress={handleSkip}>
                         <Text style={styles.skipText}>Skip</Text>
                     </TouchableOpacity>
                 </View>
+            </SafeAreaView>
 
-                {/* Feature Carousel */}
-                <FlatList
-                    ref={flatListRef}
-                    data={FEATURES}
-                    renderItem={renderFeature}
-                    keyExtractor={(item) => item.id}
-                    horizontal
-                    pagingEnabled
-                    showsHorizontalScrollIndicator={false}
-                    onViewableItemsChanged={onViewableItemsChanged}
-                    viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
-                    style={styles.carousel}
-                />
+            {/* Main Content */}
+            <View style={styles.contentArea}>
+                {/* Phone Mockup Container with Glow */}
+                <View style={styles.phoneGlowContainer}>
+                    <View style={styles.phoneFrame}>
+                        {/* Metal Edge/Border */}
+                        <View style={styles.phoneBorderInner}>
+                            <View style={styles.phoneNotch} />
+                            <View style={styles.phoneScreen}>
+                                <Image
+                                    source={item.image}
+                                    style={styles.screenImage}
+                                    resizeMode="cover"
+                                />
+                            </View>
+                            <View style={styles.phoneHomeIndicator} />
+                        </View>
+                    </View>
+                </View>
 
+                {/* Feature Info */}
+                <View style={styles.featureInfo}>
+                    <Text style={styles.featureEmoji}>{item.emoji}</Text>
+                    <Text style={styles.featureTitle}>{item.title}</Text>
+                    <Text style={styles.featureDescription}>{item.description}</Text>
+                </View>
+            </View>
+
+            {/* Bottom Section */}
+            <SafeAreaView edges={['bottom']} style={styles.safeAreaBottom}>
                 {/* Pagination Dots */}
                 <View style={styles.pagination}>
-                    {FEATURES.map((_, index) => (
+                    {FEATURES.map((_, dotIndex) => (
                         <View
-                            key={index}
+                            key={dotIndex}
                             style={[
                                 styles.paginationDot,
-                                index === currentIndex && styles.paginationDotActive,
+                                dotIndex === index && styles.paginationDotActive,
                             ]}
                         />
                     ))}
@@ -180,20 +165,48 @@ export default function FeatureShowcaseScreen({ navigation }: FeatureShowcaseScr
                         activeOpacity={0.8}
                     >
                         <Text style={styles.continueButtonText}>
-                            {currentIndex < FEATURES.length - 1
+                            {index < FEATURES.length - 1
                                 ? 'Next →'
                                 : 'Personalize Your Plan →'}
                         </Text>
                     </TouchableOpacity>
                 </View>
             </SafeAreaView>
+        </View>
+    );
+
+    return (
+        <LooviBackground variant="mixed">
+            <FlatList
+                ref={flatListRef}
+                data={FEATURES}
+                renderItem={renderFeature}
+                keyExtractor={(item) => item.id}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onViewableItemsChanged={onViewableItemsChanged}
+                viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+                style={styles.flatList}
+            />
         </LooviBackground>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
+    flatList: {
         flex: 1,
+    },
+    fullPage: {
+        width: SCREEN_WIDTH,
+        height: '100%',
+        flex: 1,
+    },
+    safeAreaTop: {
+        backgroundColor: 'transparent',
+    },
+    safeAreaBottom: {
+        backgroundColor: 'transparent',
     },
     header: {
         flexDirection: 'row',
@@ -201,6 +214,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: spacing.screen.horizontal,
         paddingTop: spacing.lg,
+        paddingBottom: spacing.xl,
     },
     headerTitle: {
         fontSize: 24,
@@ -212,13 +226,12 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         color: looviColors.text.tertiary,
     },
-    carousel: {
+    contentArea: {
         flex: 1,
-    },
-    featureSlide: {
-        width: SCREEN_WIDTH,
         alignItems: 'center',
-        paddingTop: spacing.lg,
+        justifyContent: 'center',
+        paddingTop: spacing.xl,
+        paddingBottom: spacing.lg,
     },
     phoneGlowContainer: {
         // Soft glow behind the phone (iOS only - no elevation to avoid Android edge artifacts)
@@ -229,8 +242,8 @@ const styles = StyleSheet.create({
         // No elevation - causes visible edge on Android
     },
     phoneFrame: {
-        width: SCREEN_WIDTH * 0.45, // 70% of previous 0.65
-        height: SCREEN_WIDTH * 0.91, // 70% of previous 1.3
+        width: SCREEN_WIDTH * 0.45,
+        height: SCREEN_WIDTH * 0.91,
         backgroundColor: '#1E1E1E',
         borderRadius: 32,
         padding: 3,
@@ -246,7 +259,7 @@ const styles = StyleSheet.create({
     phoneBorderInner: {
         flex: 1,
         backgroundColor: '#000',
-        borderRadius: 28, // Scaled from 40
+        borderRadius: 28,
         overflow: 'hidden',
         position: 'relative',
         borderWidth: 2,
@@ -256,8 +269,8 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 8,
         alignSelf: 'center',
-        width: 60, // Scaled from 90
-        height: 18, // Scaled from 24
+        width: 60,
+        height: 18,
         backgroundColor: '#000',
         borderRadius: 9,
         zIndex: 10,
@@ -265,7 +278,7 @@ const styles = StyleSheet.create({
     phoneScreen: {
         flex: 1,
         backgroundColor: '#fff',
-        borderRadius: 26, // Scaled from 38
+        borderRadius: 26,
         overflow: 'hidden',
     },
     screenImage: {
@@ -305,19 +318,6 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 22,
         marginBottom: spacing.md,
-    },
-    highlightBadge: {
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        paddingVertical: 6,
-        paddingHorizontal: 16,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(59, 130, 246, 0.2)',
-    },
-    highlightText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: looviColors.accent.primary,
     },
     pagination: {
         flexDirection: 'row',

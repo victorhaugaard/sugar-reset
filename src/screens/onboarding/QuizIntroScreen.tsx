@@ -17,8 +17,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { spacing } from '../../theme';
 import LooviBackground, { looviColors } from '../../components/LooviBackground';
+import GradientText from '../../components/GradientText';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -49,6 +51,10 @@ export default function QuizIntroScreen({ navigation }: QuizIntroScreenProps) {
         navigation.navigate('SugarDefinition');
     };
 
+    const handleSkip = () => {
+        navigation.navigate('ComprehensiveQuiz', { skip: true });
+    };
+
     return (
         <LooviBackground variant="coralTop">
             <SafeAreaView style={styles.container}>
@@ -61,55 +67,82 @@ export default function QuizIntroScreen({ navigation }: QuizIntroScreenProps) {
                         },
                     ]}
                 >
-                    {/* Logo */}
-                    <View style={styles.logoContainer}>
-                        <Image
-                            source={require('../../public/sugarestlogo.png')}
-                            style={styles.logo}
-                            resizeMode="contain"
-                        />
+                    {/* Brand */}
+                    <View style={styles.brandContainer}>
+                        <Text style={styles.brandText}>sugarest.</Text>
                     </View>
 
-                    {/* Welcome Text */}
-                    <View style={styles.textContainer}>
-                        <Text style={styles.welcomeText}>Welcome!</Text>
-                        <Text style={styles.title}>
-                            Let's identify if you have a problem with sugar
-                        </Text>
-                        <Text style={styles.subtitle}>
-                            Answer a few quick questions to personalize your experience and create the perfect plan for you.
-                        </Text>
-                    </View>
+                    {/* Content Area */}
+                    <View style={styles.mainContent}>
+                        {/* Eyebrow Label */}
+                        <Text style={styles.eyebrow}>EAT BETTER. FEEL BETTER.</Text>
 
-                    {/* Stats Preview */}
-                    <View style={styles.statsContainer}>
-                        <View style={styles.statItem}>
-                            <Text style={styles.statNumber}>9</Text>
-                            <Text style={styles.statLabel}>Questions</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statItem}>
-                            <Text style={styles.statNumber}>2 min</Text>
-                            <Text style={styles.statLabel}>To complete</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statItem}>
-                            <Text style={styles.statNumber}>100%</Text>
-                            <Text style={styles.statLabel}>Private</Text>
+                        {/* Primary Headline */}
+                        <Text style={styles.headline}>
+                            Take Control Of Your Eating Habits
+                        </Text>
+
+                        {/* Emotional Reassurance */}
+                        <Text style={styles.reassurance}>
+                            A personalised plan is waiting for you, designed to make you feel better, more in control, and aligned with your goals.
+                        </Text>
+
+                        {/* Value Line Section */}
+                        <View style={styles.valueSection}>
+                            <GradientText 
+                                text="Discover how sugar affects your:"
+                                colors={['#FF8C42', '#FF6B6B']} // Orange gradient
+                                fontSize={14}
+                                fontWeight="700"
+                                fontStyle="italic"
+                                style={styles.gradientTitle}
+                            />
+                            <View style={styles.valueGrid}>
+                                <View style={styles.valueItem}>
+                                    <View style={[styles.iconCircle, { backgroundColor: '#FFF5F5' }]}>
+                                        <MaterialCommunityIcons name="lightning-bolt" size={24} color="#FF6B6B" />
+                                    </View>
+                                    <Text style={styles.valueLabel}>Energy</Text>
+                                </View>
+                                <View style={styles.valueItem}>
+                                    <View style={[styles.iconCircle, { backgroundColor: '#F5F9FF' }]}>
+                                        <Ionicons name="happy" size={24} color="#4DABF7" />
+                                    </View>
+                                    <Text style={styles.valueLabel}>Mood</Text>
+                                </View>
+                                <View style={styles.valueItem}>
+                                    <View style={[styles.iconCircle, { backgroundColor: '#F2F9F2' }]}>
+                                        <MaterialCommunityIcons name="sprout" size={24} color="#51CF66" />
+                                    </View>
+                                    <Text style={styles.valueLabel}>Health</Text>
+                                </View>
+                            </View>
                         </View>
                     </View>
 
                     {/* Spacer */}
                     <View style={styles.spacer} />
 
-                    {/* Start Button */}
-                    <TouchableOpacity
-                        style={styles.startButton}
-                        onPress={handleStart}
-                        activeOpacity={0.8}
-                    >
-                        <Text style={styles.startButtonText}>Start Quiz →</Text>
-                    </TouchableOpacity>
+                    {/* Actions */}
+                    <View style={styles.actionsContainer}>
+                        {/* Start Button */}
+                        <TouchableOpacity
+                            style={styles.startButton}
+                            onPress={handleStart}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.startButtonText}>Start Now</Text>
+                        </TouchableOpacity>
+
+                        {/* Skip Link */}
+                        <TouchableOpacity
+                            style={styles.skipButton}
+                            onPress={handleSkip}
+                            activeOpacity={0.6}
+                        >
+                            <Text style={styles.skipText}>skip</Text>
+                        </TouchableOpacity>
+                    </View>
                 </Animated.View>
             </SafeAreaView>
         </LooviBackground>
@@ -123,76 +156,90 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
         paddingHorizontal: spacing.screen.horizontal,
-        paddingTop: spacing.xl,
+        paddingTop: spacing['5xl'],
         paddingBottom: spacing['2xl'],
     },
-    logoContainer: {
+    brandContainer: {
         alignItems: 'center',
-        marginTop: spacing.lg,
+        paddingVertical: spacing.sm,
     },
-    logo: {
-        width: SCREEN_WIDTH * 0.5,
-        height: SCREEN_WIDTH * 0.3,
-    },
-    textContainer: {
-        alignItems: 'center',
-        marginTop: spacing['2xl'],
-    },
-    welcomeText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: looviColors.accent.primary,
-        textTransform: 'uppercase',
-        letterSpacing: 2,
-        marginBottom: spacing.sm,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: '700',
+    brandText: {
+        fontSize: 18,
+        fontWeight: '300',
         color: looviColors.text.primary,
-        textAlign: 'center',
-        lineHeight: 36,
+        opacity: 0.8,
+    },
+    mainContent: {
+        alignItems: 'center',
+        marginTop: spacing.xl,
+    },
+    eyebrow: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: looviColors.text.primary,
+        letterSpacing: 3,
+        opacity: 0.5,
         marginBottom: spacing.md,
     },
-    subtitle: {
+    headline: {
+        fontSize: 32,
+        fontWeight: '800',
+        color: looviColors.text.primary,
+        textAlign: 'center',
+        lineHeight: 40,
+        marginBottom: spacing.lg,
+    },
+    reassurance: {
         fontSize: 16,
-        fontWeight: '400',
-        color: looviColors.text.secondary,
+        fontWeight: '500',
+        color: looviColors.text.primary,
         textAlign: 'center',
         lineHeight: 24,
-        paddingHorizontal: spacing.md,
+        paddingHorizontal: spacing.sm,
+        marginBottom: spacing['2xl'],
     },
-    statsContainer: {
+    valueSection: {
+        width: '100%',
+        alignItems: 'center',
+        marginTop: spacing.md,
+    },
+    gradientTitle: {
+        marginBottom: spacing.xl,
+    },
+    valueGrid: {
         flexDirection: 'row',
+        justifyContent: 'space-around',
+        width: '100%',
+        paddingHorizontal: spacing.sm,
+    },
+    valueItem: {
+        alignItems: 'center',
+        gap: spacing.xs,
+    },
+    iconCircle: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
         justifyContent: 'center',
         alignItems: 'center',
-        marginTop: spacing['2xl'],
-        paddingVertical: spacing.lg,
-        backgroundColor: 'rgba(255,255,255,0.5)',
-        borderRadius: 20,
+        marginBottom: spacing.xs,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
     },
-    statItem: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    statNumber: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: looviColors.text.primary,
-    },
-    statLabel: {
-        fontSize: 12,
-        fontWeight: '500',
+    valueLabel: {
+        fontSize: 13,
+        fontWeight: '600',
         color: looviColors.text.tertiary,
-        marginTop: spacing.xs,
-    },
-    statDivider: {
-        width: 1,
-        height: 30,
-        backgroundColor: 'rgba(0,0,0,0.1)',
     },
     spacer: {
         flex: 1,
+    },
+    actionsContainer: {
+        width: '100%',
+        gap: spacing.md,
     },
     startButton: {
         backgroundColor: looviColors.accent.primary,
@@ -200,14 +247,24 @@ const styles = StyleSheet.create({
         borderRadius: 30,
         alignItems: 'center',
         shadowColor: looviColors.coralOrange,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 12,
-        elevation: 5,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3,
+        shadowRadius: 15,
+        elevation: 8,
     },
     startButtonText: {
         fontSize: 18,
         fontWeight: '700',
         color: '#FFFFFF',
+    },
+    skipButton: {
+        alignItems: 'center',
+        paddingVertical: spacing.xs,
+    },
+    skipText: {
+        fontSize: 14,
+        fontWeight: '400',
+        color: looviColors.text.tertiary,
+        opacity: 0.6,
     },
 });

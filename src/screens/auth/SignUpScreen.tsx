@@ -21,6 +21,7 @@ import { spacing, borderRadius } from '../../theme';
 import LooviBackground, { looviColors } from '../../components/LooviBackground';
 import { GlassCard } from '../../components/GlassCard';
 import { useAuth } from '../../hooks/useAuth';
+import { useUserData } from '../../context/UserDataContext';
 
 type SignUpScreenProps = {
     navigation: NativeStackNavigationProp<any, 'SignUp'>;
@@ -28,7 +29,10 @@ type SignUpScreenProps = {
 
 export default function SignUpScreen({ navigation }: SignUpScreenProps) {
     const { signUp } = useAuth();
-    const [name, setName] = useState('');
+    const { onboardingData } = useUserData();
+
+    // Prefill name if available from onboarding
+    const [name, setName] = useState(onboardingData?.nickname || '');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
