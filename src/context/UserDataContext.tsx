@@ -48,6 +48,10 @@ interface UserDataContextType {
     latestHealthScore: number;
     updateHealthScore: (score: number) => void;
 
+    // Inner Circle
+    innerCircle: { id: string; name: string; role: string; color: string }[];
+    updateInnerCircle: (circle: { id: string; name: string; role: string; color: string }[]) => void;
+
     // Loading states
     isLoading: boolean;
 
@@ -99,6 +103,7 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
     const [streakData, setStreakData] = useState<StreakData | null>(null);
     const [todayCheckIn, setTodayCheckIn] = useState<DailyCheckIn | null>(null);
     const [checkInHistory, setCheckInHistory] = useState<Record<string, { status: 'sugar_free' | 'had_sugar'; grams?: number }>>({});
+    const [innerCircle, setInnerCircle] = useState<{ id: string; name: string; role: string; color: string }[]>([]);
     const [achievements, setAchievements] = useState<string[]>([]);
     const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
     const [latestHealthScore, setLatestHealthScore] = useState(0);
@@ -392,6 +397,8 @@ export function UserDataProvider({ children }: UserDataProviderProps) {
         getJournalEntries,
         latestHealthScore,
         updateHealthScore: setLatestHealthScore,
+        innerCircle,
+        updateInnerCircle: setInnerCircle,
     };
 
     // Sync stats to Firestore when they change (Phase 1)
