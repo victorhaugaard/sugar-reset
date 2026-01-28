@@ -26,7 +26,6 @@
     "expo-constants": "~18.0.13",
     "expo-dev-client": "~6.0.20",
     "expo-device": "~8.0.10",
-    "expo-firestore-offline-persistence": "^0.1.0",
     "expo-font": "~14.0.10",
     "expo-haptics": "^15.0.8",
     "expo-image-picker": "~17.0.10",
